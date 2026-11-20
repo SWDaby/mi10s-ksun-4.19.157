@@ -1,0 +1,90 @@
+name: Build thyme Droidspaces kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_repo:
+        description: 'Kernel source repo'
+        required: false
+        default: 'https://github.com/KirinNova/android_kernel_xiaomi_sm8250'
+      kernel_branch:
+        description: 'Kernel source branch'
+        required: false
+        default: 'HyperSU'
+      defconfig:
+        description: 'Defconfig (stock config baseline)'
+        required: false
+        default: 'thyme_stock-defconfig'
+
+concurrency:
+  group: thyme-droidspaces
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: thyme / ${{ inputs.defconfig }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential cpio flex libelf-dev libssl-dev lz4 \
+            python3 rsync zip unzip wget ca-certificates openssl \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu
+
+      - name: Clone kernel source
+        env:
+          KREPO: ${{ inputs.kernel_repo }}
+          KBRANCH: ${{ inputs.kernel_branch }}
+        run: |
+          git clone --depth=1 -b "$KBRANCH" "$KREPO" "$GITHUB_WORKSPACE/kernel"
+          cd "$GITHUB_WORKSPACE/kernel"
+          echo "kernel HEAD: $(git rev-parse --short HEAD)"
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
+
+      - name: Setup ZyC Clang 16.0.6
+        run: |
+          mkdir -p "$HOME/zyc-clang"
+          cd "$HOME/zyc-clang"
+          wget -q --tries=3 --timeout=60 \
+            https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260510-release/Clang-16.0.6-20260510.tar.gz
+          tar -zxf Clang-16.0.6-20260510.tar.gz
+          rm -f Clang-16.0.6-20260510.tar.gz
+          "$HOME/zyc-clang/bin/clang" --version
+
+      - name: Configure (stock config + Droidspaces layer)
+        env:
+          KERNEL_DIR: ${{ github.workspace }}/kernel
+          OUT: ${{ github.workspace }}/out
+          DIST: ${{ github.workspace }}/dist
+          REPO_ROOT: ${{ github.workspace }}
+          DEFCONFIG: ${{ inputs.defconfig }}
+        run: bash scripts/configure.sh
+
+      - name: Build kernel Image
+        env:
+          KERNEL_DIR: ${{ github.workspace }}/kernel
+          OUT: ${{ github.workspace }}/out
+          DIST: ${{ github.workspace }}/dist
+          REPO_ROOT: ${{ github.workspace }}
+        run: bash scripts/build.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thyme-droidspaces-${{ github.run_number }}
+          path: |
+            dist/Image
+            dist/AnyKernel3-thyme-droidspaces.zip
+            dist/config-final.txt
+            dist/config-diff.txt
+            dist/build.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,6 @@
+# 强制 LF：Actions 里的 bash 脚本一旦变成 CRLF 会直接报 "$'\r': command not found"
+* text=auto eol=lf
+
+# 这两个文件必须逐字节保持原样，不做任何行尾转换
+*.patch -text
+*.config -text
