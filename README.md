@@ -13,6 +13,7 @@
 | --- | --- |
 | 配置层 | 以树自带 `thyme_stock-defconfig` 为底，只叠加 Droidspaces 官方 non-GKI 清单（命名空间 / cgroup / devtmpfs / veth+bridge+macvlan / netfilter） |
 | 树结构必需 | `ANDROID_VENDOR_HOOKS=y`：这棵树里 `arch/arm64/net/bpf_jit_comp.c` 等代码**无条件**调用 `trace_android_vh_*`，而 `vendor_hooks.h` 关闭该选项时指向本树不存在的 `DECLARE_EVENT_NOP` → 不开就编译失败。开的是静态键 tracepoint，没人注册时零开销 |
+| 树结构必需 | `MACH_XIAOMI_THYME=y`：这棵树把小米私有充电/电池驱动（IDT P9415 / RX1619 无线充、BQ2597X 电荷泵、LN8282、DS28E16 电池验真、1-wire）挂在 `CONFIG_MACH_XIAOMI` 的目录门控下，而原厂 config 转储里没有这个新符号 → 不开启时这些驱动**符号是 `=y` 但文件根本不编译**（链接期报 `idtp_op_ble_flag` 未定义），无线充/电荷泵/电池验真会静默丢失 |
 | 还原原厂 | `BOOTUP_RECLAIM=y`、`BRIDGE_IGMP_SNOOPING=y`（原厂 y，树自带移植漏了）；`BLK_WBT`、`IOSCHED_BFQ` 关掉（原厂 n，树自带移植多开了） |
 | 关闭项 | `ANDROID_PARANOID_NETWORK`（Droidspaces 硬性要求；`PERF_HUMANTASK` 原厂本来就是关的，不用动） |
 | 补丁 | `01` xt_qtaguid 内核 panic 修复；`02` cgroup 文件前缀恢复 |
@@ -20,7 +21,7 @@
 | 产物 | `Image`、`AnyKernel3-thyme-droidspaces.zip`、`config-final.txt`、`config-diff.txt`（与原厂配置逐行差异）、`stock-gaps.txt`、`build.log` |
 | **不做** | 不碰 `vendor_boot` / `dtbo` / `vbmeta` / ramdisk；AnyKernel3 只写 `Image`，不写 dtb |
 
-> 配置阶段共 9 组硬断言，任何一项不满足都在编译前红叉：Droidspaces 关键项存活、必须关闭项没被 Kconfig 重新打开、关键驱动没变成 `=m`、**原厂 `=y` 的 228 个硬件符号一个都不许掉**、补丁能干净应用。
+> 配置阶段全是硬断言，任何一项不满足都在编译前红叉：Droidspaces 关键项存活、必须关闭项没被 Kconfig 重新打开、关键驱动没变成 `=m`、**原厂 `=y` 的 228 个硬件符号一个都不许掉**、**小米私有充电/电池 12 个驱动符号必须真的被编进来**、补丁能干净应用。
 
 > `01` 补丁会自动跳过：原厂 config 里没有 `CONFIG_NETFILTER_XT_MATCH_QTAGUID`，该内核树也没有 `net/netfilter/xt_qtaguid.c`，panic 路径本来就不存在。补丁仍留在仓库里备查，脚本用 `git apply --check` 判断，不适用就跳过、不硬套。
 

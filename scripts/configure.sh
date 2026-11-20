@@ -120,10 +120,16 @@ section "2.5 树结构必需项 + 原厂行为还原"
 # （都注册 "st,fts"，fts_521 是新版带手势/FOD 的完整实现），同时打开会
 # duplicate symbol 链接失败。维护者自己的 thyme_defconfig 用的是 FTS_V521，
 # 这里保持一致：只留 FTS_V521。
+# MACH_XIAOMI_THYME：这棵树把小米私有充电/电池驱动挂在 CONFIG_MACH_XIAOMI
+# 的目录门控下（drivers/power/supply/{renesas,nuvolta,ti,maxim,lionsemi}/），
+# 而 thyme_stock-defconfig 是原厂 4.19.157 的 config 转储，里面没有这个新符号
+# → 那些 =y 的驱动被静默跳过，链接期报 idtp_op_ble_flag / rx_op_ble_flag 未定义。
+# 维护者自己的 thyme_defconfig 是 MACH_XIAOMI_THYME=y，这里保持一致。
 "$KCFG" --file "$CFG" \
     -e ANDROID_VENDOR_HOOKS \
     -e BOOTUP_RECLAIM \
     -e BRIDGE_IGMP_SNOOPING \
+    -e MACH_XIAOMI_THYME \
     -d BLK_WBT \
     -d BLK_WBT_MQ \
     -d BLK_WBT_SQ \
@@ -172,6 +178,26 @@ for s in "${CRITICAL[@]}"; do
 done
 [ "$missing" -eq 0 ] || { echo "ERROR: 关键配置未存活"; exit 1; }
 echo "  OK: ${#CRITICAL[@]} 项全部为 y"
+
+section "5.5 断言：小米私有硬件驱动必须真的被编进来"
+# 这些符号在原厂 config 里本来就是 =y；但本树把它们放在 CONFIG_MACH_XIAOMI
+# 的目录门控下，缺了 MACH_XIAOMI 就会“符号 =y 但文件不编译”，静默丢功能
+# （无线充、双电芯电荷泵、电池验真、1-wire）。这里逐项兜底。
+XIAOMI_HW=(
+    MACH_XIAOMI MACH_XIAOMI_SM8250 MACH_XIAOMI_THYME
+    IDT_P9415 RX1619 RX1619_TRIM RX1619_REMOVE
+    BQ2597X_CHARGE_PUMP BQ_PUMP_WIRELESS_CHARGE
+    BATT_VERIFY_BY_DS28E16 ONEWIRE_GPIO LN8282
+)
+missing=0
+for s in "${XIAOMI_HW[@]}"; do
+    if ! grep -qx "CONFIG_${s}=y" "$CFG"; then
+        echo "  MISSING: CONFIG_${s}=y"
+        missing=1
+    fi
+done
+[ "$missing" -eq 0 ] || { echo "ERROR: 小米私有硬件驱动没启用（MACH_XIAOMI 门控失效）"; exit 1; }
+echo "  OK: ${#XIAOMI_HW[@]} 项全部为 y"
 
 section "6. 断言：必须关闭的项"
 for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK BLK_WBT IOSCHED_BFQ $INTENTIONAL_OFF_SYMS; do
