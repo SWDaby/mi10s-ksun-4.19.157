@@ -1,8 +1,9 @@
 # thyme (Mi 10S) Droidspaces 内核 —— GitHub Actions 构建包
 
 原厂基线：`V14.0.6.0.TGACNXM`（MIUI 14 / Android 13，kernel 4.19.157-perf-g9d90dd04aa7c）
-基座源码：`KirinNova/android_kernel_xiaomi_sm8250` 分支 `HyperSU`（4.19.325，CAF + MIUI 树）
-基座配置：`arch/arm64/configs/thyme_stock-defconfig`（由原厂 config 生成，与原厂差 100 项，多为废弃符号）
+基座源码：`KirinNova/android_kernel_xiaomi_sm8250`，固定 commit `9b55ba0`（4.19.325，CAF + MIUI 树）
+基座配置：`arch/arm64/configs/thyme_stock-defconfig`（该树维护者按原厂 config 移植的完整转储）
+核对基准：`config/stock-4.19.157-thyme.config`（从你手机原厂 boot 的 IKCONFIG 解出的真 config，只用于逐项核对）
 
 ---
 
@@ -10,12 +11,16 @@
 
 | 步骤 | 内容 |
 | --- | --- |
-| 配置层 | 原厂 config 全保留，只叠加 Droidspaces 官方 non-GKI 清单（命名空间 / cgroup / devtmpfs / veth+bridge+macvlan / netfilter） |
-| 关闭项 | `ANDROID_PARANOID_NETWORK`、`PERF_HUMANTASK`（Droidspaces 硬性要求） |
+| 配置层 | 以树自带 `thyme_stock-defconfig` 为底，只叠加 Droidspaces 官方 non-GKI 清单（命名空间 / cgroup / devtmpfs / veth+bridge+macvlan / netfilter） |
+| 树结构必需 | `ANDROID_VENDOR_HOOKS=y`：这棵树里 `arch/arm64/net/bpf_jit_comp.c` 等代码**无条件**调用 `trace_android_vh_*`，而 `vendor_hooks.h` 关闭该选项时指向本树不存在的 `DECLARE_EVENT_NOP` → 不开就编译失败。开的是静态键 tracepoint，没人注册时零开销 |
+| 还原原厂 | `BOOTUP_RECLAIM=y`、`BRIDGE_IGMP_SNOOPING=y`（原厂 y，树自带移植漏了）；`BLK_WBT`、`IOSCHED_BFQ` 关掉（原厂 n，树自带移植多开了） |
+| 关闭项 | `ANDROID_PARANOID_NETWORK`（Droidspaces 硬性要求；`PERF_HUMANTASK` 原厂本来就是关的，不用动） |
 | 补丁 | `01` xt_qtaguid 内核 panic 修复；`02` cgroup 文件前缀恢复 |
 | 构建期 | `LOCALVERSION_AUTO=n`、`DEBUG_INFO=n`（不进 Image，只提速） |
-| 产物 | `Image`、`AnyKernel3-thyme-droidspaces.zip`、`config-final.txt`、`config-diff.txt`（与原厂配置逐行差异）、`build.log` |
+| 产物 | `Image`、`AnyKernel3-thyme-droidspaces.zip`、`config-final.txt`、`config-diff.txt`（与原厂配置逐行差异）、`stock-gaps.txt`、`build.log` |
 | **不做** | 不碰 `vendor_boot` / `dtbo` / `vbmeta` / ramdisk；AnyKernel3 只写 `Image`，不写 dtb |
+
+> 配置阶段共 9 组硬断言，任何一项不满足都在编译前红叉：Droidspaces 关键项存活、必须关闭项没被 Kconfig 重新打开、关键驱动没变成 `=m`、**原厂 `=y` 的 228 个硬件符号一个都不许掉**、补丁能干净应用。
 
 > `01` 补丁会自动跳过：原厂 config 里没有 `CONFIG_NETFILTER_XT_MATCH_QTAGUID`，该内核树也没有 `net/netfilter/xt_qtaguid.c`，panic 路径本来就不存在。补丁仍留在仓库里备查，脚本用 `git apply --check` 判断，不适用就跳过、不硬套。
 
@@ -37,7 +42,7 @@
 ## 三、跑构建
 
 1. 仓库页 → **Actions** → 左边选 **Build thyme Droidspaces kernel** → 右边 **Run workflow**
-2. 三个输入保持默认即可（`KirinNova/...`、`HyperSU`、`thyme_stock-defconfig`），点绿色 **Run workflow**
+2. 三个输入保持默认即可（仓库地址、固定 commit `9b55ba0`、`thyme_stock-defconfig`），点绿色 **Run workflow**
 3. 等 40–60 分钟。**配置断言失败会在前 5 分钟就红叉**，日志里会直接写哪一项没存活
 4. 绿勾后，进这次 run 页面底部 **Artifacts** → 下载 `thyme-droidspaces-<编号>.zip`
 5. 把下载到的 zip 放到 `C:\Users\Administrator\Desktop\mi10s\`，告诉我 —— 我本地做最后一步：用原厂 `m10s_boot.img` 重打包出 `boot-droidspaces.img`（逐字节校验 ramdisk 未变、dtb 段未变），并核对 `Image` 的版本串与 config
@@ -81,15 +86,29 @@ zcat /proc/config.gz | grep -E 'PARANOID|HUMANTASK'   # 两项都应为 "is not 
 
 ---
 
-## 六、已知取舍（只有这几项，且都绕不过去）
+## 六、已知差异与取舍
 
-| 改动 | 影响 | 说明 |
+**绕不过去的（基座树本身决定）**
+
+| 项 | 影响 | 说明 |
 | --- | --- | --- |
-| 关 `PERF_HUMANTASK` | MIUI 性能提示 / 部分游戏调度特性降级 | Droidspaces 明文要求；该树自带的 `thyme_stock-defconfig` 本来也是关的 |
+| 4.19.325（原厂 4.19.157） | `uname -r` 变化；原厂 6 个非关键 vendor 模块（msm_rdbg / usb_gspca / dvb_mpq×2 / lcd_class / llcc_perfmon）CRC 不匹配会加载失败 | 全是非关键项，不影响开机与外设；`MODULE_SIG_FORCE=n`，不会因此拒绝启动 |
+| `sf_binder` / `emergency_memory` / `perf_critical_rt_task` | 原厂 `=y`，这棵树里没有对应符号（树已把这些功能重写/移除） | 只影响 MIUI 的性能提示与内存回收策略，不影响功能；`stock-gaps.txt` 里有完整清单 |
+| `millet`（应用冻结框架） | 树已把它拆成 7 个默认关闭的子项（`MILLET_CORE/BINDER/PKG/HS/SIG/CGROUP` + GKI 变体），维护者自己的 `thyme_defconfig` 也没开 | 保持维护者的默认（关了）；MIUI 冻结功能会退化但不影响开机。要试可以后续单独出一版打开 |
+
+**为容器改的**
+
+| 项 | 影响 | 说明 |
+| --- | --- | --- |
 | 关 `ANDROID_PARANOID_NETWORK` | 失去 AID_INET 组级网络限制 | 容器联网必需；per-uid 网络管控仍由 netd/eBPF 负责，所有 MIUI 定制内核都如此 |
 | 开 `USER_NS` | 增加内核攻击面 | 容器必需 |
-| 4.19.325（原厂 4.19.157） | `uname -r` 变化；原厂 6 个非关键 vendor 模块（msm_rdbg / usb_gspca / dvb_mpq×2 / lcd_class / llcc_perfmon）CRC 不匹配会加载失败 | 全是非关键项，不影响开机与外设；`MODULE_SIG_FORCE=n`，不会因此拒绝启动 |
-| 不刷 dtb | 无 | 原厂 DTB 在 vendor_boot，本来就是这台机器的正确 DTB |
+| 开 `ANDROID_VENDOR_HOOKS` | 多一批静态键 tracepoint | 树结构要求（见上），没人注册时零开销 |
+
+**不做**
+
+| 项 | 说明 |
+| --- | --- |
+| 不刷 dtb | 原厂 DTB 在 `vendor_boot`，本来就是这台机器的正确 DTB；只换 Image 让硬件初始化 100% 保持原厂 |
 
 ---
 
@@ -99,7 +118,7 @@ zcat /proc/config.gz | grep -E 'PARANOID|HUMANTASK'   # 两项都应为 "is not 
 .github/workflows/build.yml     Actions 流程
 scripts/configure.sh            基线 config + Droidspaces 层 + 断言 + 打补丁
 scripts/build.sh                编译 Image + 打 AnyKernel3
-config/stock-4.19.157-thyme.config   从原厂 boot 的 IKCONFIG 解出的完整 config（比对基线）
+config/stock-4.19.157-thyme.config   从原厂 boot 的 IKCONFIG 解出的完整 config（只做核对，不当基线）
 patches/01-fix-xt-qtaguid-panic.patch
 patches/02-fix-cgroup-file-prefix.patch
 anykernel/anykernel.sh          只写 Image、不写 dtb/dtbo

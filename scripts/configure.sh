@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 基线：thyme_stock-defconfig（由原厂 V14.0.6.0 config 生成）
-# 只叠加 Droidspaces 官方 non-GKI 配置层 + 修 2 个运行时 bug，其余一项不动。
+# 基线：内核树自带的 thyme_stock-defconfig（维护者按原厂 V14.0.6.0 config 移植的完整 .config 转储）
+# 参考：config/stock-4.19.157-thyme.config（设备原厂 boot 解出的真 config，只用于核对）
+# 只叠加 Droidspaces 官方 non-GKI 配置层 + 树结构必需项 + 修 2 个运行期 bug。
 set -euo pipefail
 
 : "${KERNEL_DIR:?KERNEL_DIR not set}"
@@ -14,6 +15,7 @@ export LC_ALL=C
 
 CFG="$OUT/.config"
 KCFG="$KERNEL_DIR/scripts/config"
+STOCK_CFG="$REPO_ROOT/config/stock-4.19.157-thyme.config"
 mkdir -p "$OUT" "$DIST"
 
 MK=(make -j"$(nproc)" -C "$KERNEL_DIR" O="$OUT" ARCH=arm64 SUBARCH=arm64
@@ -23,22 +25,18 @@ MK=(make -j"$(nproc)" -C "$KERNEL_DIR" O="$OUT" ARCH=arm64 SUBARCH=arm64
 section() { echo; echo "=============== $* ==============="; }
 
 section "1. 生成 .config（基线 $DEFCONFIG）"
-if [ ! -f "$KERNEL_DIR/arch/arm64/configs/$DEFCONFIG" ]; then
-    echo "ERROR: $KERNEL_DIR/arch/arm64/configs/$DEFCONFIG 不存在"
+BASE="$KERNEL_DIR/arch/arm64/configs/$DEFCONFIG"
+if [ ! -f "$BASE" ]; then
+    echo "ERROR: $BASE 不存在"
     ls "$KERNEL_DIR/arch/arm64/configs/" | head -40
     exit 1
 fi
-# kbuild 的 %_defconfig 规则只认下划线（thyme_defconfig）；这份原厂配置是连字符命名，
-# 且本身就是完整 .config 转储，所以直接落盘再 olddefconfig。
-case "$DEFCONFIG" in
-    *_defconfig)
-        "${MK[@]}" "$DEFCONFIG"
-        ;;
-    *)
-        echo "  $DEFCONFIG 不以 _defconfig 结尾，按完整 config 直接写入 .config"
-        cp "$KERNEL_DIR/arch/arm64/configs/$DEFCONFIG" "$CFG"
-        ;;
-esac
+# 这份文件是完整 .config 转储（名字里是连字符，不是 make 目标），直接落盘再 olddefconfig。
+cp "$BASE" "$CFG"
+cp "$BASE" "$DIST/config-base.txt"
+BASE_SYMS=$(grep -cE '^(# )?CONFIG_' "$CFG" || true)
+echo "  基线符号数: $BASE_SYMS"
+[ "$BASE_SYMS" -gt 3500 ] || { echo "ERROR: 基线 config 内容异常（不是完整转储？）"; exit 1; }
 
 section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 "$KCFG" --file "$CFG" \
@@ -105,6 +103,24 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -d ANDROID_PARANOID_NETWORK \
     -d PERF_HUMANTASK
 
+section "2.5 树结构必需项 + 原厂行为还原"
+# 这棵树里 arch/arm64/net/bpf_jit_comp.c 等代码无条件调用 trace_android_vh_*，
+# 而 include/trace/hooks/vendor_hooks.h 关闭该选项时指向本树根本不存在的
+# DECLARE_EVENT_NOP 宏 —— 即 CAF 代码要求必须开启（原厂 config 里没有这个选项，
+# 属于用这棵 4.19.325 树必须付的代价；开的是静态键 tracepoint，没人注册时零开销）。
+# 原厂 =y，维护者的 stock 移植遗漏：开机内存回收行为与原厂一致
+# 原厂 =y，容器网桥下的 IGMP 组播行为与原厂一致
+# 原厂 =n，维护者移植里多开的块层特性，关掉回到原厂行为
+"$KCFG" --file "$CFG" \
+    -e ANDROID_VENDOR_HOOKS \
+    -e BOOTUP_RECLAIM \
+    -e BRIDGE_IGMP_SNOOPING \
+    -d BLK_WBT \
+    -d BLK_WBT_MQ \
+    -d BLK_WBT_SQ \
+    -d IOSCHED_BFQ \
+    -d BFQ_GROUP_IOSCHED
+
 section "3. 构建期微调（不改功能）"
 "$KCFG" --file "$CFG" --set-str LOCALVERSION "-perf"
 "$KCFG" --file "$CFG" -d LOCALVERSION_AUTO   # 固定版本串，便于核对
@@ -117,8 +133,9 @@ section "4.5 基本完整性（防止 config 解析异常）"
 for s in ARM64 ARCH_KONA MODULES BLOCK; do
     grep -qx "CONFIG_${s}=y" "$CFG" || { echo "ERROR: CONFIG_${s}=y 缺失，基线 config 没被正确加载"; exit 1; }
 done
-echo "  .config 行数: $(wc -l < "$CFG")"
-[ "$(wc -l < "$CFG")" -gt 3500 ] || { echo "ERROR: .config 行数异常偏少，基线 config 可能未生效"; exit 1; }
+LINES=$(wc -l < "$CFG")
+echo "  .config 行数: $LINES"
+[ "$LINES" -gt 3500 ] || { echo "ERROR: .config 行数异常偏少，基线 config 可能未生效"; exit 1; }
 
 section "5. 断言：Droidspaces 关键项必须存活"
 CRITICAL=(
@@ -134,6 +151,7 @@ CRITICAL=(
     NETFILTER_XT_MATCH_ADDRTYPE NF_CT_NETLINK NF_NAT_REDIRECT
     NF_NAT_IPV6 IP6_NF_NAT IP6_NF_TARGET_MASQUERADE
     IP_ADVANCED_ROUTER IP_MULTIPLE_TABLES
+    ANDROID_VENDOR_HOOKS BOOTUP_RECLAIM BRIDGE_IGMP_SNOOPING
 )
 missing=0
 for s in "${CRITICAL[@]}"; do
@@ -142,13 +160,13 @@ for s in "${CRITICAL[@]}"; do
         missing=1
     fi
 done
-[ "$missing" -eq 0 ] || { echo "ERROR: Droidspaces 关键配置未存活"; exit 1; }
+[ "$missing" -eq 0 ] || { echo "ERROR: 关键配置未存活"; exit 1; }
 echo "  OK: ${#CRITICAL[@]} 项全部为 y"
 
 section "6. 断言：必须关闭的项"
-for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK; do
+for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK BLK_WBT IOSCHED_BFQ; do
     if grep -qx "CONFIG_${s}=y" "$CFG"; then
-        echo "ERROR: CONFIG_${s} 被 Kconfig 重新打开，容器的启动/联网会出问题"
+        echo "ERROR: CONFIG_${s} 应关闭，但被 Kconfig 重新打开了"
         exit 1
     fi
     echo "  OK: CONFIG_${s} 未启用"
@@ -169,6 +187,33 @@ while read -r line; do
 done < <(grep '=m$' "$CFG" || true)
 [ "$bad" -eq 0 ] || { echo "ERROR: 关键驱动变成模块，会与 vendor 里原厂模块冲突"; exit 1; }
 echo "  模块数: $(grep -c '=m$' "$CFG" || true)"
+
+section "7.5 原厂硬件功能核对（原厂 =y 的硬件项不许被关掉）"
+# 只核对硬件相关子系统；容器相关的功能项不在此列。
+CRIT_PAT='TOUCHSCREEN|DRM_MSM|DRM_PANEL|KGSL|ADRENO|VIDC|CAMERA|ICNSS|CNSS|WLAN|SND|LPASS|UFS|MMC|USB|MHI|PINCTRL|SPMI|RTC|THERMAL|QPNP|SMB|CHARGER|FUEL_GAUGE|BATTERY|REGULATOR|ZRAM|MIUI|HAPTIC|HALL|NFC|FINGERPRINT|SDE|ION|DMABUF|BQ[0-9]'
+lost=0
+: > "$DIST/stock-gaps.txt"
+while read -r line; do
+    sym="${line#CONFIG_}"
+    sym="${sym%%=*}"
+    if grep -qx "CONFIG_${sym}=y" "$CFG"; then
+        continue
+    fi
+    if grep -qE "^(# )?CONFIG_${sym}(=| is not set)" "$CFG"; then
+        echo "  DISABLED: CONFIG_${sym}（原厂 y）"
+        lost=$((lost + 1))
+    else
+        echo "$sym" >> "$DIST/stock-gaps.txt"
+    fi
+done < <(grep -E "^CONFIG_(${CRIT_PAT})[A-Z0-9_]*=y$" "$STOCK_CFG" || true)
+GAPS=$(wc -l < "$DIST/stock-gaps.txt")
+[ "$lost" -eq 0 ] || { echo "ERROR: 原厂开启的硬件功能被关掉了（见上）"; exit 1; }
+echo "  OK: 原厂 =y 的硬件项全部保留"
+echo "  NOTE: $GAPS 项原厂 =y 的硬件/功能符号在本内核树里已不存在（清单见 dist/stock-gaps.txt）"
+if [ "$GAPS" -gt 0 ]; then
+    sed 's/^/    - /' "$DIST/stock-gaps.txt" | head -20
+    [ "$GAPS" -gt 20 ] && echo "    ...（共 $GAPS 项）"
+fi
 
 section "8. 应用 Droidspaces 运行期补丁"
 cd "$KERNEL_DIR"
@@ -195,10 +240,10 @@ apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件�
 
 section "9. 存档：最终配置 + 与原厂配置的差异"
 cp "$CFG" "$DIST/config-final.txt"
-diff -u "$REPO_ROOT/config/stock-4.19.157-thyme.config" "$CFG" > "$DIST/config-diff.txt" || true
+diff -u "$STOCK_CFG" "$CFG" > "$DIST/config-diff.txt" || true
 
 echo
-echo "================ 与原厂配置的差异（去掉纯时间戳/版本后）================"
+echo "================ 与原厂配置的差异（只列 CONFIG 行）================"
 grep -E '^[+-](CONFIG_|# CONFIG_)' "$DIST/config-diff.txt" | grep -vE '^\+\+\+|^---' | sed 's/^/  /' || true
 echo
-echo "配置阶段完成。uname -r 预期: $(grep '^CONFIG_LOCALVERSION=' "$CFG" | cut -d'"' -f2)-$(awk '$1=="VERSION"{v=$3}$1=="PATCHLEVEL"{p=$3}$1=="SUBLEVEL"{s=$3}END{print v"."p"."s}' "$KERNEL_DIR/Makefile")"
+echo "配置阶段完成。uname -r 预期: $(awk '$1=="VERSION"{v=$3}$1=="PATCHLEVEL"{p=$3}$1=="SUBLEVEL"{s=$3}END{print v"."p"."s}' "$KERNEL_DIR/Makefile")$(grep '^CONFIG_LOCALVERSION=' "$CFG" | cut -d'"' -f2)"

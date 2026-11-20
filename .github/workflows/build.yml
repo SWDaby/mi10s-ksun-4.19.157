@@ -8,9 +8,9 @@ on:
         required: false
         default: 'https://github.com/KirinNova/android_kernel_xiaomi_sm8250'
       kernel_branch:
-        description: 'Kernel source branch'
+        description: 'Kernel source commit SHA or branch'
         required: false
-        default: 'HyperSU'
+        default: '9b55ba068848f41a24a91204565b42fc7b66c680'
       defconfig:
         description: 'Defconfig (stock config baseline)'
         required: false
@@ -41,11 +41,14 @@ jobs:
       - name: Clone kernel source
         env:
           KREPO: ${{ inputs.kernel_repo }}
-          KBRANCH: ${{ inputs.kernel_branch }}
+          KREF: ${{ inputs.kernel_branch }}
         run: |
-          git clone --depth=1 -b "$KBRANCH" "$KREPO" "$GITHUB_WORKSPACE/kernel"
+          git init -q "$GITHUB_WORKSPACE/kernel"
           cd "$GITHUB_WORKSPACE/kernel"
-          echo "kernel HEAD: $(git rev-parse --short HEAD)"
+          git remote add origin "$KREPO"
+          git fetch --depth=1 origin "$KREF"
+          git checkout -q FETCH_HEAD
+          echo "kernel HEAD: $(git rev-parse HEAD)"
           grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
 
       - name: Setup ZyC Clang 16.0.6
@@ -84,7 +87,9 @@ jobs:
             dist/Image
             dist/AnyKernel3-thyme-droidspaces.zip
             dist/config-final.txt
+            dist/config-base.txt
             dist/config-diff.txt
+            dist/stock-gaps.txt
             dist/build.log
           if-no-files-found: warn
           retention-days: 30
