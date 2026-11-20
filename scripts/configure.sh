@@ -28,7 +28,17 @@ if [ ! -f "$KERNEL_DIR/arch/arm64/configs/$DEFCONFIG" ]; then
     ls "$KERNEL_DIR/arch/arm64/configs/" | head -40
     exit 1
 fi
-"${MK[@]}" "$DEFCONFIG"
+# kbuild 的 %_defconfig 规则只认下划线（thyme_defconfig）；这份原厂配置是连字符命名，
+# 且本身就是完整 .config 转储，所以直接落盘再 olddefconfig。
+case "$DEFCONFIG" in
+    *_defconfig)
+        "${MK[@]}" "$DEFCONFIG"
+        ;;
+    *)
+        echo "  $DEFCONFIG 不以 _defconfig 结尾，按完整 config 直接写入 .config"
+        cp "$KERNEL_DIR/arch/arm64/configs/$DEFCONFIG" "$CFG"
+        ;;
+esac
 
 section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 "$KCFG" --file "$CFG" \
@@ -102,6 +112,13 @@ section "3. 构建期微调（不改功能）"
 
 section "4. olddefconfig"
 "${MK[@]}" olddefconfig
+
+section "4.5 基本完整性（防止 config 解析异常）"
+for s in ARM64 ARCH_KONA MODULES BLOCK; do
+    grep -qx "CONFIG_${s}=y" "$CFG" || { echo "ERROR: CONFIG_${s}=y 缺失，基线 config 没被正确加载"; exit 1; }
+done
+echo "  .config 行数: $(wc -l < "$CFG")"
+[ "$(wc -l < "$CFG")" -gt 3500 ] || { echo "ERROR: .config 行数异常偏少，基线 config 可能未生效"; exit 1; }
 
 section "5. 断言：Droidspaces 关键项必须存活"
 CRITICAL=(
