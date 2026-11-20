@@ -16,6 +16,11 @@ export LC_ALL=C
 CFG="$OUT/.config"
 KCFG="$KERNEL_DIR/scripts/config"
 STOCK_CFG="$REPO_ROOT/config/stock-4.19.157-thyme.config"
+
+# 主动关闭、且已在 README「已知差异」里说明理由的项（不参与原厂保真核对）。
+INTENTIONAL_OFF_SYMS="TOUCHSCREEN_ST"
+INTENTIONAL_OFF_NOTE="TOUCHSCREEN_ST 与 TOUCHSCREEN_ST_FTS_V521 是同源 fts 驱动（都注册 st,fts），同时开启必然 duplicate symbol；维护者自己的 thyme_defconfig 也只留 FTS_V521"
+
 mkdir -p "$OUT" "$DIST"
 
 MK=(make -j"$(nproc)" -C "$KERNEL_DIR" O="$OUT" ARCH=arm64 SUBARCH=arm64
@@ -111,6 +116,10 @@ section "2.5 树结构必需项 + 原厂行为还原"
 # 原厂 =y，维护者的 stock 移植遗漏：开机内存回收行为与原厂一致
 # 原厂 =y，容器网桥下的 IGMP 组播行为与原厂一致
 # 原厂 =n，维护者移植里多开的块层特性，关掉回到原厂行为
+# TOUCHSCREEN_ST 和 TOUCHSCREEN_ST_FTS_V521 在本树里是两份同源 fts 驱动
+# （都注册 "st,fts"，fts_521 是新版带手势/FOD 的完整实现），同时打开会
+# duplicate symbol 链接失败。维护者自己的 thyme_defconfig 用的是 FTS_V521，
+# 这里保持一致：只留 FTS_V521。
 "$KCFG" --file "$CFG" \
     -e ANDROID_VENDOR_HOOKS \
     -e BOOTUP_RECLAIM \
@@ -119,7 +128,8 @@ section "2.5 树结构必需项 + 原厂行为还原"
     -d BLK_WBT_MQ \
     -d BLK_WBT_SQ \
     -d IOSCHED_BFQ \
-    -d BFQ_GROUP_IOSCHED
+    -d BFQ_GROUP_IOSCHED \
+    -d TOUCHSCREEN_ST
 
 section "3. 构建期微调（不改功能）"
 "$KCFG" --file "$CFG" --set-str LOCALVERSION "-perf"
@@ -164,7 +174,7 @@ done
 echo "  OK: ${#CRITICAL[@]} 项全部为 y"
 
 section "6. 断言：必须关闭的项"
-for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK BLK_WBT IOSCHED_BFQ; do
+for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK BLK_WBT IOSCHED_BFQ $INTENTIONAL_OFF_SYMS; do
     if grep -qx "CONFIG_${s}=y" "$CFG"; then
         echo "ERROR: CONFIG_${s} 应关闭，但被 Kconfig 重新打开了"
         exit 1
@@ -200,6 +210,11 @@ while read -r line; do
         continue
     fi
     if grep -qE "^(# )?CONFIG_${sym}(=| is not set)" "$CFG"; then
+        case " $INTENTIONAL_OFF_SYMS " in
+            *" $sym "*)
+                echo "  BY DESIGN: CONFIG_${sym}（原厂 y，本包主动关闭）"
+                continue ;;
+        esac
         echo "  DISABLED: CONFIG_${sym}（原厂 y）"
         lost=$((lost + 1))
     else
@@ -209,6 +224,7 @@ done < <(grep -E "^CONFIG_(${CRIT_PAT})[A-Z0-9_]*=y$" "$STOCK_CFG" || true)
 GAPS=$(wc -l < "$DIST/stock-gaps.txt")
 [ "$lost" -eq 0 ] || { echo "ERROR: 原厂开启的硬件功能被关掉了（见上）"; exit 1; }
 echo "  OK: 原厂 =y 的硬件项全部保留"
+echo "  NOTE: 主动关闭: $INTENTIONAL_OFF_NOTE"
 echo "  NOTE: $GAPS 项原厂 =y 的硬件/功能符号在本内核树里已不存在（清单见 dist/stock-gaps.txt）"
 if [ "$GAPS" -gt 0 ]; then
     sed 's/^/    - /' "$DIST/stock-gaps.txt" | head -20

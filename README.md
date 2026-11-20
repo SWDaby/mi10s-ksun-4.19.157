@@ -95,6 +95,7 @@ zcat /proc/config.gz | grep -E 'PARANOID|HUMANTASK'   # 两项都应为 "is not 
 | 4.19.325（原厂 4.19.157） | `uname -r` 变化；原厂 6 个非关键 vendor 模块（msm_rdbg / usb_gspca / dvb_mpq×2 / lcd_class / llcc_perfmon）CRC 不匹配会加载失败 | 全是非关键项，不影响开机与外设；`MODULE_SIG_FORCE=n`，不会因此拒绝启动 |
 | `sf_binder` / `emergency_memory` / `perf_critical_rt_task` | 原厂 `=y`，这棵树里没有对应符号（树已把这些功能重写/移除） | 只影响 MIUI 的性能提示与内存回收策略，不影响功能；`stock-gaps.txt` 里有完整清单 |
 | `millet`（应用冻结框架） | 树已把它拆成 7 个默认关闭的子项（`MILLET_CORE/BINDER/PKG/HS/SIG/CGROUP` + GKI 变体），维护者自己的 `thyme_defconfig` 也没开 | 保持维护者的默认（关了）；MIUI 冻结功能会退化但不影响开机。要试可以后续单独出一版打开 |
+| 关 `TOUCHSCREEN_ST`（保留 `TOUCHSCREEN_ST_FTS_V521`） | 无：两者是同源 fts 驱动（都注册 `st,fts`），只是 `st/` 是旧副本、`fts_521/` 是新版（FOD/手势/debugfs 都依赖它） | 同时开启必然 `duplicate symbol` 链接失败；维护者自己的 `thyme_defconfig` 同样只留 `FTS_V521`，触摸、指纹解锁、手势全部走 `FTS_V521` |
 
 **为容器改的**
 
