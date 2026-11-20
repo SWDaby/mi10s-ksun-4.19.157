@@ -75,7 +75,7 @@ fastboot flash boot m10s_boot.img
 ## 五、刷完怎么验收
 
 ```bash
-uname -r                                   # 应为 4.19.325-perf
+uname -r                                   # 应为 4.19.325-cip135-st19-perf+
 zcat /proc/config.gz | grep -E 'CONFIG_(PID_NS|IPC_NS|USER_NS|SYSVIPC|DEVTMPFS|MACVLAN|NF_TABLES|CGROUP_DEVICE|CGROUP_PIDS|CFS_BANDWIDTH)='
 zcat /proc/config.gz | grep -E 'PARANOID|HUMANTASK'   # 两项都应为 "is not set"
 ```
@@ -125,3 +125,15 @@ patches/01-fix-xt-qtaguid-panic.patch
 patches/02-fix-cgroup-file-prefix.patch
 anykernel/anykernel.sh          只写 Image、不写 dtb/dtbo
 ```
+
+---
+
+## 八、本次构建结果（2026-11-20）
+
+- Actions run：[`44710961866`](https://github.com/jingbohi/thyme-droidspaces/actions/runs/44710961866)（commit `3efe9cd`，17m38s）
+- `Image`：45,084,688 字节；`Linux version 4.19.325-cip135-st19-perf+`（ZyC Clang 16.0.6 + LLD 16.0.6，SMP PREEMPT）
+- 配置核对：Droidspaces 关键项全 y；原厂 =y 的 228 个硬件符号 0 丢失；小米私有充电/电池 12 项全 y；原厂已无的符号仅 1 个（`FINGERPRINT_GOODIX_FOD_THY`）
+- 与原厂 config 逐行差异：380 行（`config-diff.txt`）
+- 重打包：`boot-droidspaces.img` MD5 `A0A1708333E63D4BE24F1080848485FE`，15 项校验全 PASS（只换 kernel，ramdisk / vbmeta / cmdline / 分区大小逐字节一致）
+
+> 版本串里的 `+` 是 kbuild 检测到工作树有未提交改动（我们的两个补丁）自动追加的，仅影响 `uname -r` 显示，不影响功能。
