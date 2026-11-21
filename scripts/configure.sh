@@ -50,6 +50,9 @@ echo "  基线符号数: $BASE_SYMS"
 
 section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 # 来源：bcggxx 仓库 .github/workflows/droidspaces.config（Droidspaces 作者 ravindu644）
+# 官方清单里的 CGROUP_NET_PRIO 已去掉：本树的 net/core/netprio_cgroup.c 仍是
+# 4.19 的 css->cgroup->id 写法，而 struct cgroup 已回移到 5.x（id 在 kernfs 里），
+# 打开必编译失败。原厂本身也是关的，容器网络不依赖它。
 "$KCFG" --file "$CFG" \
     -e SYSCTL \
     -e SYSVIPC \
@@ -67,7 +70,6 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e CGROUP_SCHED \
     -e FAIR_GROUP_SCHED \
     -e CGROUP_FREEZER \
-    -e CGROUP_NET_PRIO \
     -e CGROUP_CPUACCT \
     -e DEVTMPFS \
     -e OVERLAY_FS \
@@ -171,7 +173,7 @@ CRITICAL=(
     NAMESPACES PID_NS UTS_NS IPC_NS
     SECCOMP SECCOMP_FILTER
     CGROUPS CGROUP_DEVICE CGROUP_PIDS MEMCG CGROUP_SCHED
-    FAIR_GROUP_SCHED CGROUP_FREEZER CGROUP_NET_PRIO
+    FAIR_GROUP_SCHED CGROUP_FREEZER
     DEVTMPFS OVERLAY_FS TMPFS_POSIX_ACL TMPFS_XATTR
     FW_LOADER FW_LOADER_USER_HELPER
     NET_NS VETH BRIDGE MACVLAN BRIDGE_NETFILTER
