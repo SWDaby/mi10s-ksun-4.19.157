@@ -95,8 +95,8 @@ fi
 
 # QEMU 探针（只用于本地验证，绝不刷真机）：
 # 打开 QEMU virt 机器的 PL011 串口，这样内核即便在真机卡死的位置也能打印日志。
-# 注意 PE thyme 树没有 ARCH_VIRT，本地验证时用打了 "qcom,kona" 的 QEMU 设备树
-# 去匹配 ARCH_KONA 的 machine_desc（见 tools/qemu_probe.sh）。
+# arm64 没有 machine_desc 表，QEMU 默认的 linux,dummy-virt 设备树可直接使用，
+# 不需要伪造 compatible（见 tools/qemu_probe.sh）。
 if [ "${QEMU_PROBE:-0}" = "1" ]; then
     "$KCFG" --file "$CFG" \
         -e ARM_AMBA \
