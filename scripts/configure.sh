@@ -93,6 +93,21 @@ if [ "${DISABLE_ARM64_HARDENING:-0}" = "1" ]; then
     export INTENTIONAL_OFF_EXTRA="${INTENTIONAL_OFF_EXTRA:-} CONFIG_ARM64_SW_TTBR0_PAN CONFIG_HARDEN_BRANCH_PREDICTOR CONFIG_HARDEN_EL2_VECTORS"
 fi
 
+# QEMU 探针（只用于本地验证，绝不刷真机）：
+# 打开 QEMU virt 机器的 PL011 串口，这样内核即便在真机卡死的位置也能打印日志。
+# 注意 PE thyme 树没有 ARCH_VIRT，本地验证时用打了 "qcom,kona" 的 QEMU 设备树
+# 去匹配 ARCH_KONA 的 machine_desc（见 tools/qemu_probe.sh）。
+if [ "${QEMU_PROBE:-0}" = "1" ]; then
+    "$KCFG" --file "$CFG" \
+        -e ARM_AMBA \
+        -e SERIAL_AMBA_PL011 \
+        -e SERIAL_AMBA_PL011_CONSOLE \
+        -e SERIAL_EARLYCON \
+        -e POWER_RESET \
+        -e POWER_RESET_SYSCON
+    echo "  QEMU 探针: PL011 串口已打开（仅本地验证，不要刷真机）"
+fi
+
 if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
     echo "  模式: 不叠加 Droidspaces 层（纯原厂配置对照构建）"
 else
@@ -187,7 +202,8 @@ section "2.5 版本串：与原厂 vermagic 完全一致"
 # 原厂 .ko 的 vermagic 是 "4.19.157-perf-g9d90dd04aa7c SMP preempt mod_unload modversions aarch64"。
 # 少一项模块就拒绝加载，所以这四项一个都不能动：
 #   SMP=y / PREEMPT=y / MODULE_UNLOAD=y / MODVERSIONS=y
-# 本树的 scripts/setlocalversion 只追加 CONFIG_LOCALVERSION，不额外加 "+"。
+# 不管基线是原厂完整配置还是别的树的 defconfig，这里都强制拉回来。
+"$KCFG" --file "$CFG" -e SMP -e PREEMPT -e MODULE_UNLOAD -e MODVERSIONS
 "$KCFG" --file "$CFG" --set-str LOCALVERSION "$LOCALVERSION_STR"
 "$KCFG" --file "$CFG" -d LOCALVERSION_AUTO
 # 只影响 vmlinux 调试段，不进 Image，也不影响符号 CRC；关掉省一半构建时间/磁盘。
@@ -267,13 +283,15 @@ fi
 section "8. 应用 Droidspaces 运行期补丁"
 cd "$KERNEL_DIR"
 apply_patch() {
-    local p="$1" describe="$2"
+    local p="$1" describe="$2" optional="${3:-0}"
     if [ ! -f "$p" ]; then echo "ERROR: 补丁不存在 $p"; exit 1; fi
     if git apply --check --whitespace=nowarn "$p" 2>/dev/null; then
         git apply --whitespace=nowarn "$p"
         echo "  applied: $describe"
     elif git apply --reverse --check --whitespace=nowarn "$p" 2>/dev/null; then
         echo "  already applied: $describe"
+    elif [ "$optional" = "1" ]; then
+        echo "  skip: 补丁与当前基线树不匹配，已跳过（$describe）"
     else
         echo "ERROR: 补丁与当前内核树不兼容: $describe"
         git apply --check --whitespace=nowarn "$p" || true
@@ -282,21 +300,27 @@ apply_patch() {
 }
 if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
 if [ -f net/netfilter/xt_qtaguid.c ]; then
-    apply_patch "$REPO_ROOT/patches/01-fix-xt-qtaguid-panic.patch" "xt_qtaguid panic 修复"
+    apply_patch "$REPO_ROOT/patches/01-fix-xt-qtaguid-panic.patch" "xt_qtaguid panic 修复" "${PATCH_OPTIONAL:-0}"
 else
     echo "  skip: 本树无 xt_qtaguid，panic 路径不存在"
 fi
-apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复"
+apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复" "${PATCH_OPTIONAL:-0}"
 else
     echo "  跳过 Droidspaces 运行期补丁（DROIDSPACES_LAYER=0）"
 fi
 
-# 原厂 41 个 vendor .ko 是用小米自己的 4.19.157 树编的，本树 genksyms 算出的 CRC
-# 与之普遍不同（struct file/net/tracepoint 等被回移过）。严格校验会让 WiFi
+# 原厂 41 个 vendor .ko 是用小米自己的 4.19.157 树编的，换基线后 genksyms 算出的 CRC
+# 与之普遍不同（struct file/net/tracepoint 等实现不一样）。严格校验会让 WiFi
 # (qca_cld3_qca6390.ko) 和全部音频模块 (audio_*.ko) 直接拒绝加载，所以降级为警告。
 if [ "${ALLOW_CRC_MISMATCH:-1}" = "1" ]; then
-    apply_patch "$REPO_ROOT/patches/03-allow-crc-mismatch.patch" \
-        "原厂 vendor 模块 CRC 不匹配降级为警告"
+    if ! grep -q 'disagrees about version of symbol %s (ignored)' kernel/module.c; then
+        apply_patch "$REPO_ROOT/patches/03-allow-crc-mismatch.patch" \
+            "原厂 vendor 模块 CRC 不匹配降级为警告" 1
+    fi
+    if ! grep -q 'disagrees about version of symbol %s (ignored)' kernel/module.c; then
+        echo "  补丁上下文不匹配，改用结构化改写 kernel/module.c"
+        python3 "$REPO_ROOT/scripts/patch_crc.py" kernel/module.c
+    fi
     grep -q 'disagrees about version of symbol %s (ignored)' kernel/module.c \
         || { echo "ERROR: CRC 降级补丁没有生效"; exit 1; }
     echo "  模式: 允许 CRC 不匹配（只打印警告，不拒绝加载）"

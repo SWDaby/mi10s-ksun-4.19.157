@@ -39,14 +39,18 @@ on:
         description: 'Disable SW_TTBR0_PAN / HARDEN_BRANCH_PREDICTOR / HARDEN_EL2_VECTORS (1=yes)'
         required: false
         default: '0'
+      qemu_probe:
+        description: 'Enable PL011 console so the image can be booted in local QEMU (1=yes, never flash this)'
+        required: false
+        default: '0'
 
 concurrency:
-  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}-${{ inputs.disable_arm64_hardening }}
+  group: thyme-${{ inputs.kernel_branch }}-${{ inputs.defconfig }}-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}-${{ inputs.disable_arm64_hardening }}-${{ inputs.qemu_probe }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: thyme / layer=${{ inputs.droidspaces_layer }} crc=${{ inputs.allow_crc_mismatch }} relr_off=${{ inputs.disable_relr }}
+    name: thyme / ${{ inputs.kernel_branch }} / layer=${{ inputs.droidspaces_layer }} crc=${{ inputs.allow_crc_mismatch }} relr_off=${{ inputs.disable_relr }} kaslr_off=${{ inputs.disable_kaslr }} qemu=${{ inputs.qemu_probe }}
     runs-on: ubuntu-22.04
     timeout-minutes: 180
 
@@ -74,8 +78,10 @@ jobs:
           git checkout -q FETCH_HEAD
           echo "kernel HEAD: $(git rev-parse HEAD)"
           grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
-          echo "--- 原厂 thyme 配置是否在树里 ---"
-          ls -l arch/arm64/configs/stock/thyme_stock_defconfig
+          echo "--- 基线树里的 thyme 配置（不同树路径不同，仅提示） ---"
+          ls -l arch/arm64/configs/stock/thyme_stock_defconfig 2>/dev/null \
+            || ls -l arch/arm64/configs/thyme_defconfig 2>/dev/null \
+            || ls arch/arm64/configs | head -20
 
       - name: Setup AOSP Clang r416183b
         run: |
@@ -100,6 +106,9 @@ jobs:
           DISABLE_KASLR: ${{ inputs.disable_kaslr }}
           ALLOW_CONFIG_DRIFT: ${{ inputs.allow_config_drift }}
           DISABLE_ARM64_HARDENING: ${{ inputs.disable_arm64_hardening }}
+          QEMU_PROBE: ${{ inputs.qemu_probe }}
+          # pipa 树（bcggxx）的 5.x 回移补丁必须应用；其它基线树允许跳过不兼容的可选补丁。
+          PATCH_OPTIONAL: ${{ contains(inputs.kernel_repo, 'moon_sm8250') && '0' || '1' }}
         run: bash scripts/configure.sh
 
       - name: Build kernel Image
