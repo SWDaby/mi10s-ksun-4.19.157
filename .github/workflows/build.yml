@@ -6,15 +6,15 @@ on:
       kernel_repo:
         description: 'Kernel source repo'
         required: false
-        default: 'https://github.com/KirinNova/android_kernel_xiaomi_sm8250'
+        default: 'https://github.com/bcggxx/android_kernel_xiaomi_moon_sm8250'
       kernel_branch:
         description: 'Kernel source commit SHA or branch'
         required: false
-        default: '9b55ba068848f41a24a91204565b42fc7b66c680'
+        default: '931792aa4683961ed6457e577477d68f164e779b'
       defconfig:
         description: 'Defconfig (stock config baseline)'
         required: false
-        default: 'thyme_stock-defconfig'
+        default: 'stock/thyme_stock_defconfig'
 
 concurrency:
   group: thyme-droidspaces
@@ -36,7 +36,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential cpio flex libelf-dev libssl-dev lz4 \
             python3 rsync zip unzip wget ca-certificates openssl \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu
+            device-tree-compiler perl
 
       - name: Clone kernel source
         env:
@@ -50,16 +50,18 @@ jobs:
           git checkout -q FETCH_HEAD
           echo "kernel HEAD: $(git rev-parse HEAD)"
           grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
+          echo "--- 原厂 thyme 配置是否在树里 ---"
+          ls -l arch/arm64/configs/stock/thyme_stock_defconfig
 
-      - name: Setup ZyC Clang 16.0.6
+      - name: Setup AOSP Clang r416183b
         run: |
-          mkdir -p "$HOME/zyc-clang"
-          cd "$HOME/zyc-clang"
-          wget -q --tries=3 --timeout=60 \
-            https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260510-release/Clang-16.0.6-20260510.tar.gz
-          tar -zxf Clang-16.0.6-20260510.tar.gz
-          rm -f Clang-16.0.6-20260510.tar.gz
-          "$HOME/zyc-clang/bin/clang" --version
+          mkdir -p "$HOME/aosp-clang"
+          wget -q --tries=3 --timeout=120 \
+            -O /tmp/clang.tar.gz \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
+          tar -xzf /tmp/clang.tar.gz -C "$HOME/aosp-clang"
+          rm -f /tmp/clang.tar.gz
+          "$HOME/aosp-clang/bin/clang" --version
 
       - name: Configure (stock config + Droidspaces layer)
         env:
@@ -89,7 +91,8 @@ jobs:
             dist/config-final.txt
             dist/config-base.txt
             dist/config-diff.txt
-            dist/stock-gaps.txt
+            dist/stock-check.txt
+            dist/Module.symvers
             dist/build.log
           if-no-files-found: warn
           retention-days: 30
