@@ -30,6 +30,7 @@ APPEND="console=ttyAMA0 earlycon=pl011,0x09000000 keep_bootcon panic=1 ignore_lo
 # -no-reboot + panic=1：panic 后 1 秒退出，不会挂着刷屏
 timeout 180 qemu-system-aarch64 \
     -M virt -cpu cortex-a72 -m 2048 -smp 2 \
+    -nic none \
     -kernel "$IMG" \
     -append "$APPEND" \
     -display none -monitor none -serial "file:$LOG" -no-reboot
@@ -40,7 +41,7 @@ echo "--- 关键标记 ---"
 for pat in "Booting Linux" "Linux version" "Machine model" "Memory:" "smp:" \
            "console [ttyAMA" "Freeing unused kernel memory" "Run /init" \
            "Kernel panic" "Unable to handle kernel" "Internal error" "rcu"; do
-    n=$(grep -c -- "$pat" "$LOG" 2>/dev/null || true)
+    n=$(grep -cF -- "$pat" "$LOG" 2>/dev/null || true)
     printf "  %-32s %s\n" "$pat" "$n"
 done
 
