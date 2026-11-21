@@ -27,9 +27,17 @@ on:
         description: 'Disable CONFIG_RELR to match the stock build (1=yes)'
         required: false
         default: '1'
+      disable_kaslr:
+        description: 'Disable CONFIG_RANDOMIZE_BASE (1=yes, matches this tree own thyme config)'
+        required: false
+        default: '1'
+      allow_config_drift:
+        description: 'Skip the stock-fidelity gate (1=yes, diagnostic builds only)'
+        required: false
+        default: '0'
 
 concurrency:
-  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}
+  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}
   cancel-in-progress: true
 
 jobs:
@@ -85,6 +93,8 @@ jobs:
           ALLOW_CRC_MISMATCH: ${{ inputs.allow_crc_mismatch }}
           DROIDSPACES_LAYER: ${{ inputs.droidspaces_layer }}
           DISABLE_RELR: ${{ inputs.disable_relr }}
+          DISABLE_KASLR: ${{ inputs.disable_kaslr }}
+          ALLOW_CONFIG_DRIFT: ${{ inputs.allow_config_drift }}
         run: bash scripts/configure.sh
 
       - name: Build kernel Image

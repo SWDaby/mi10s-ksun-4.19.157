@@ -46,7 +46,15 @@ cp "$BASE" "$CFG"
 cp "$BASE" "$DIST/config-base.txt"
 BASE_SYMS=$(grep -cE '^(# )?CONFIG_' "$CFG" || true)
 echo "  基线符号数: $BASE_SYMS"
-[ "$BASE_SYMS" -gt 3500 ] || { echo "ERROR: 基线 config 内容异常（不是完整转储？）"; exit 1; }
+# stock/ 下是完整 .config 转储；其他（vendor/*_defconfig）是精简 defconfig，符号数天然少。
+case "$DEFCONFIG" in
+    stock/*)
+        [ "$BASE_SYMS" -gt 3500 ] || { echo "ERROR: 基线 config 内容异常（不是完整转储？）"; exit 1; }
+        ;;
+    *)
+        [ "$BASE_SYMS" -gt 200 ] || { echo "ERROR: 基线 defconfig 内容异常"; exit 1; }
+        ;;
+esac
 
 # RELR 重定位打包：原厂内核用 GNU ld 2.27 编译，binutils 2.27 不支持 RELR，
 # 所以原厂 CONFIG_RELR 是关的；换 LLD 后 olddefconfig 会按 default y 自动打开。
@@ -57,6 +65,17 @@ if [ "${DISABLE_RELR:-1}" = "1" ]; then
     echo "  RELR: 关闭（与原厂一致）"
 else
     echo "  RELR: 保留（DISABLE_RELR=0）"
+fi
+
+# KASLR：原厂 =y，但本树作者自己的 thyme 配置里明确写了
+# "# CONFIG_RANDOMIZE_BASE is not set"。KASLR 的重定位同样在 head.S、
+# 控制台之前完成；换 LLD 后若重定位表与原厂的 GNU ld 输出不同，
+# 结果就是「无任何输出、卡开机 logo」。默认关掉，先确认能不能起来。
+if [ "${DISABLE_KASLR:-1}" = "1" ]; then
+    "$KCFG" --file "$CFG" -d RANDOMIZE_BASE
+    echo "  KASLR: 关闭（与本树 thyme 配置一致）"
+else
+    echo "  KASLR: 保留（DISABLE_KASLR=0，与原厂一致）"
 fi
 
 if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
@@ -222,9 +241,13 @@ else
 fi
 
 section "7. 原厂保真核对（原厂 =y / =m 一个都不许丢）"
+if [ "${ALLOW_CONFIG_DRIFT:-0}" = "1" ]; then
+    echo "  跳过：ALLOW_CONFIG_DRIFT=1（诊断构建，基线不是原厂完整配置）"
+else
 python3 "$REPO_ROOT/scripts/check_config.py" \
     "$STOCK_CFG" "$CFG" "$LOCALVERSION_STR" "$EXPECTED_RELEASE" \
     | tee "$DIST/stock-check.txt"
+fi
 
 section "8. 应用 Droidspaces 运行期补丁"
 cd "$KERNEL_DIR"
