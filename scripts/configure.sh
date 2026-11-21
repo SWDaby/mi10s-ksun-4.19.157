@@ -74,6 +74,10 @@ fi
 if [ "${DISABLE_KASLR:-1}" = "1" ]; then
     "$KCFG" --file "$CFG" -d RANDOMIZE_BASE
     echo "  KASLR: 关闭（与本树 thyme 配置一致）"
+    # 关掉 KASLR 会连带让 RELOCATABLE 及其从属符号从 .config 里消失，
+    # 属于同一处改动，登记给保真门禁，避免被当成"原厂功能丢失"。
+    export INTENTIONAL_OFF_EXTRA="${INTENTIONAL_OFF_EXTRA:-} CONFIG_RANDOMIZE_BASE"
+    export EXPECTED_ABSENT_EXTRA="${EXPECTED_ABSENT_EXTRA:-} CONFIG_RELOCATABLE CONFIG_RANDOMIZE_MODULE_REGION_FULL CONFIG_ARCH_HAS_RELR"
 else
     echo "  KASLR: 保留（DISABLE_KASLR=0，与原厂一致）"
 fi

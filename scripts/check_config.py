@@ -15,13 +15,24 @@
 """
 import re
 import sys
+import os
+
+def _env_set(name):
+    """从环境变量读附加登记项，逗号/空格分隔，统一补 CONFIG_ 前缀。"""
+    raw = os.environ.get(name, "")
+    out = set()
+    for item in re.split(r"[,\s]+", raw.strip()):
+        if not item:
+            continue
+        out.add(item if item.startswith("CONFIG_") else "CONFIG_" + item)
+    return out
 
 # 主动关闭、且理由明确的项（其余任何 y -> n 都视为原厂功能丢失）
 INTENTIONAL_OFF = {
     "CONFIG_DEBUG_INFO",                # 只影响 vmlinux 调试段，不进 Image，不影响 CRC
     "CONFIG_LOCALVERSION_AUTO",         # 改用固定 LOCALVERSION，保证版本串与原厂一致
     "CONFIG_ANDROID_PARANOID_NETWORK",  # 容器需要正常网络访问
-}
+} | _env_set("INTENTIONAL_OFF_EXTRA")
 
 # 原厂 config 里有、但这套源码树里根本没有对应 Kconfig 符号的项。
 # 这类项不是“被关掉”，而是源码树缺失；全部经过人工核对。
@@ -41,7 +52,7 @@ EXPECTED_ABSENT = {
     "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_TOUCH": "本树 TCM 为单 bool 无子选项",
     "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_DEVICE": "本树 TCM 为单 bool 无子选项",
     "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_DIAGNOSTICS": "本树 TCM 为单 bool 无子选项",
-}
+} | {k: "诊断构建主动关闭（见 INTENTIONAL_OFF_EXTRA）" for k in _env_set("EXPECTED_ABSENT_EXTRA")}
 
 REQUIRED_Y = [
     "CONFIG_ARM64",
