@@ -7,6 +7,9 @@
 规则:
   * 原厂 =y 的符号，最终必须仍是 =y（仅允许白名单里的主动关闭项）
   * 原厂 =m 的符号，最终必须仍是 =m
+  * 原厂 =y 但最终 =n        -> 错误（依赖被破坏，功能真丢了）
+  * 原厂 =y 但最终整行不存在 -> 该源码树没有这个 Kconfig 符号；
+    只有在 EXPECTED_ABSENT 里登记过（附原因）才算通过
   * 原厂没有的符号可以新增（Droidspaces 层、Kconfig 依赖项）
   * vermagic 相关项必须与原厂一致，否则 vendor 里的原厂 .ko 会拒绝加载
 """
@@ -15,9 +18,29 @@ import sys
 
 # 主动关闭、且理由明确的项（其余任何 y -> n 都视为原厂功能丢失）
 INTENTIONAL_OFF = {
-    "CONFIG_DEBUG_INFO",              # 只影响 vmlinux 调试段，不进 Image，不影响 CRC
-    "CONFIG_LOCALVERSION_AUTO",       # 改用固定 LOCALVERSION，保证版本串与原厂一致
+    "CONFIG_DEBUG_INFO",                # 只影响 vmlinux 调试段，不进 Image，不影响 CRC
+    "CONFIG_LOCALVERSION_AUTO",         # 改用固定 LOCALVERSION，保证版本串与原厂一致
     "CONFIG_ANDROID_PARANOID_NETWORK",  # 容器需要正常网络访问
+}
+
+# 原厂 config 里有、但这套源码树里根本没有对应 Kconfig 符号的项。
+# 这类项不是“被关掉”，而是源码树缺失；全部经过人工核对。
+EXPECTED_ABSENT = {
+    # --- 本树是 CAF 后期基线，核心代码已回移 5.x 实现 ---
+    "CONFIG_PACKAGE_RUNTIME_INFO": "5.x 已移除该 arm64 选项，纯构建期打包信息，无运行期影响",
+    "CONFIG_RWSEM_XCHGADD_ALGORITHM": "本树 arm64 改用通用 rwsem（5.x 回移），读写锁签名/CRC 不变",
+    "CONFIG_HAVE_HW_BREAKPOINT": "本树 perf 架构不提供 HW_BREAKPOINT，隐藏符号，不影响驱动",
+    # --- 小米私有驱动：公开源码里没有，任何第三方 thyme 内核都缺 ---
+    "CONFIG_EMERGENCY_MEMORY": "小米紧急内存驱动，源码未公开；缺失只影响低内存兜底策略",
+    "CONFIG_MI_MEMORY_SYSFS": "小米内存 sysfs 统计节点，源码未公开；缺失只影响 MIUI 统计读取",
+    "CONFIG_MIGT": "小米游戏加速驱动，源码未公开；缺失只影响游戏加速开关",
+    "CONFIG_MIGT_ENERGY_MODEL": "MIGT 附属项，同上",
+    # --- Synaptics TCM 在本树是单 bool（无子选项），驱动本体被裁剪 ---
+    "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_I2C": "本树 TCM 为单 bool 无子选项",
+    "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_CORE": "本树 TCM 为单 bool 无子选项",
+    "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_TOUCH": "本树 TCM 为单 bool 无子选项",
+    "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_DEVICE": "本树 TCM 为单 bool 无子选项",
+    "CONFIG_TOUCHSCREEN_SYNAPTICS_TCM_DIAGNOSTICS": "本树 TCM 为单 bool 无子选项",
 }
 
 REQUIRED_Y = [
@@ -29,6 +52,15 @@ REQUIRED_Y = [
     "CONFIG_MODULE_UNLOAD",
     "CONFIG_MODVERSIONS",
     "CONFIG_MODULE_SIG",
+]
+
+# 这台机器实际用到的触屏/指纹驱动必须全部在位
+REQUIRED_DRIVERS = [
+    "CONFIG_TOUCHSCREEN_ST_FTS_V521",
+    "CONFIG_TOUCHSCREEN_GOODIX_GTX8",
+    "CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE",
+    "CONFIG_TOUCHSCREEN_FOD",
+    "CONFIG_FINGERPRINT_GOODIX_FOD_THY",
 ]
 
 
@@ -57,15 +89,22 @@ def main():
     stock = load(stock_path)
     final = load(final_path)
 
-    lost_y = []
-    lost_m = []
+    lost_y = []      # 原厂 y -> 最终 n（依赖被破坏）
+    lost_m = []      # 原厂 m -> 非 m
+    absent = []      # 原厂 y -> 最终整行不存在（源码树没有该符号）
     for name, value in stock.items():
         if value == "y":
-            got = final.get(name, "MISSING")
-            if got != "y" and name not in INTENTIONAL_OFF:
+            got = final.get(name)
+            if got == "y":
+                continue
+            if name in INTENTIONAL_OFF:
+                continue
+            if got is None:
+                absent.append(name)
+            else:
                 lost_y.append((name, got))
         elif value == "m":
-            got = final.get(name, "MISSING")
+            got = final.get(name)
             if got != "m":
                 lost_m.append((name, got))
 
@@ -86,7 +125,6 @@ def main():
 
     print("  主动关闭: %s" % ", ".join(sorted(INTENTIONAL_OFF)))
 
-    # 版本串 / vermagic
     ok = True
     want_local = '"%s"' % localversion
     if final.get("CONFIG_LOCALVERSION") != want_local:
@@ -100,9 +138,13 @@ def main():
         if final.get(name) != "y":
             print("  ERROR: %s 必须为 y（vermagic/模块兼容性）" % name)
             ok = False
+    for name in REQUIRED_DRIVERS:
+        if final.get(name) != "y":
+            print("  ERROR: %s 必须为 y（本机硬件驱动）" % name)
+            ok = False
 
     if lost_y:
-        print("  ERROR: 原厂 =y 但最终被关掉/丢失: %d 项" % len(lost_y))
+        print("  ERROR: 原厂 =y 但最终被关掉: %d 项" % len(lost_y))
         for name, got in lost_y:
             print("    - %-56s 原厂=y  最终=%s" % (name, got))
         ok = False
@@ -110,6 +152,20 @@ def main():
         print("  ERROR: 原厂 =m 但最终不是模块: %d 项" % len(lost_m))
         for name, got in lost_m:
             print("    - %-56s 原厂=m  最终=%s" % (name, got))
+        ok = False
+
+    unexpected = sorted(set(absent) - set(EXPECTED_ABSENT))
+    if absent:
+        print("  源码树缺失的符号: %d 项（已登记 %d 项）" %
+              (len(absent), len(absent) - len(unexpected)))
+        for name in sorted(absent):
+            reason = EXPECTED_ABSENT.get(name)
+            if reason:
+                print("    ~ %-56s %s" % (name, reason))
+            else:
+                print("    ! %-56s 未登记，源码树里没有这个符号" % name)
+    if unexpected:
+        print("  ERROR: 出现未登记的源码树缺失符号: %d 项" % len(unexpected))
         ok = False
 
     if ok:
