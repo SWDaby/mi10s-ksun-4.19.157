@@ -103,7 +103,6 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e IP6_NF_TARGET_MASQUERADE \
     -e IP_NF_TARGET_MASQUERADE \
     -e NF_TABLES \
-    -e NETFILTER_XT_TARGET_MASQUERADE \
     -e NETFILTER_XT_TARGET_TCPMSS \
     -e NETFILTER_XT_MATCH_ADDRTYPE \
     -e NETFILTER_XT_MATCH_COMMENT \
@@ -230,6 +229,19 @@ else
     echo "  skip: 本树无 xt_qtaguid，panic 路径不存在"
 fi
 apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复"
+
+# 原厂 41 个 vendor .ko 是用小米自己的 4.19.157 树编的，本树 genksyms 算出的 CRC
+# 与之普遍不同（struct file/net/tracepoint 等被回移过）。严格校验会让 WiFi
+# (qca_cld3_qca6390.ko) 和全部音频模块 (audio_*.ko) 直接拒绝加载，所以降级为警告。
+if [ "${ALLOW_CRC_MISMATCH:-1}" = "1" ]; then
+    apply_patch "$REPO_ROOT/patches/03-allow-crc-mismatch.patch" \
+        "原厂 vendor 模块 CRC 不匹配降级为警告"
+    grep -q 'disagrees about version of symbol %s (ignored)' kernel/module.c \
+        || { echo "ERROR: CRC 降级补丁没有生效"; exit 1; }
+    echo "  模式: 允许 CRC 不匹配（只打印警告，不拒绝加载）"
+else
+    echo "  模式: 严格 CRC 校验（ALLOW_CRC_MISMATCH=0）"
+fi
 
 section "9. 存档：最终配置 + 与原厂配置的差异"
 cp "$CFG" "$DIST/config-final.txt"

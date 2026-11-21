@@ -15,6 +15,10 @@ on:
         description: 'Defconfig (stock config baseline)'
         required: false
         default: 'stock/thyme_stock_defconfig'
+      allow_crc_mismatch:
+        description: 'Load stock vendor modules even when symbol CRCs differ (1=yes)'
+        required: false
+        default: '1'
 
 concurrency:
   group: thyme-droidspaces
@@ -70,6 +74,7 @@ jobs:
           DIST: ${{ github.workspace }}/dist
           REPO_ROOT: ${{ github.workspace }}
           DEFCONFIG: ${{ inputs.defconfig }}
+          ALLOW_CRC_MISMATCH: ${{ inputs.allow_crc_mismatch }}
         run: bash scripts/configure.sh
 
       - name: Build kernel Image
@@ -93,6 +98,7 @@ jobs:
             dist/config-diff.txt
             dist/stock-check.txt
             dist/Module.symvers
+            dist/crc-mode.txt
             dist/build.log
           if-no-files-found: warn
           retention-days: 30

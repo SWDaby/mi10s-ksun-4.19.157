@@ -54,6 +54,14 @@ if strings -a "$IMG" | grep -qiE 'KernelPatch|KernelSU|kpatch'; then
 fi
 
 cp "$IMG" "$DIST/Image"
+# 记录本轮模块 CRC 校验模式，方便回溯（configure.sh 已对源码打过补丁）。
+if grep -q 'disagrees about version of symbol %s (ignored)' "$KERNEL_DIR/kernel/module.c"; then
+    echo "  CRC 模式: 允许原厂模块不匹配（仅警告）"
+    echo "allow" > "$DIST/crc-mode.txt"
+else
+    echo "  CRC 模式: 严格"
+    echo "strict" > "$DIST/crc-mode.txt"
+fi
 # 同时保存导出的符号 CRC 清单，供与原厂 Image 做 MODVERSIONS 兼容性比对。
 [ -f "$OUT/Module.symvers" ] && cp "$OUT/Module.symvers" "$DIST/Module.symvers" || true
 
