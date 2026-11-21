@@ -48,6 +48,20 @@ BASE_SYMS=$(grep -cE '^(# )?CONFIG_' "$CFG" || true)
 echo "  基线符号数: $BASE_SYMS"
 [ "$BASE_SYMS" -gt 3500 ] || { echo "ERROR: 基线 config 内容异常（不是完整转储？）"; exit 1; }
 
+# RELR 重定位打包：原厂内核用 GNU ld 2.27 编译，binutils 2.27 不支持 RELR，
+# 所以原厂 CONFIG_RELR 是关的；换 LLD 后 olddefconfig 会按 default y 自动打开。
+# RELR 在 head.S 里、控制台注册之前执行，一旦有问题就是「无输出、卡开机 logo」，
+# 所以默认关掉，与原厂保持一致。
+if [ "${DISABLE_RELR:-1}" = "1" ]; then
+    "$KCFG" --file "$CFG" -d RELR
+    echo "  RELR: 关闭（与原厂一致）"
+else
+    echo "  RELR: 保留（DISABLE_RELR=0）"
+fi
+
+if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
+    echo "  模式: 不叠加 Droidspaces 层（纯原厂配置对照构建）"
+else
 section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 # 来源：bcggxx 仓库 .github/workflows/droidspaces.config（Droidspaces 作者 ravindu644）
 # 官方清单里的 CGROUP_NET_PRIO 已去掉：本树的 net/core/netprio_cgroup.c 仍是
@@ -133,6 +147,7 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e IPV6 \
     -e IPV6_MULTIPLE_TABLES \
     -d ANDROID_PARANOID_NETWORK
+fi
 
 section "2.5 版本串：与原厂 vermagic 完全一致"
 # 原厂 .ko 的 vermagic 是 "4.19.157-perf-g9d90dd04aa7c SMP preempt mod_unload modversions aarch64"。
@@ -167,6 +182,7 @@ echo "  kernelrelease = $REL"
 
 section "5. 断言：Droidspaces 关键项必须存活"
 # 只列本树确实存在、且容器运行必需的项；可选/已被上游移除的项不在此列。
+if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
 CRITICAL=(
     SYSVIPC POSIX_MQUEUE
     NAMESPACES PID_NS UTS_NS IPC_NS
@@ -201,6 +217,9 @@ for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK; do
     fi
     echo "  OK: CONFIG_${s} 未启用"
 done
+else
+    echo "  跳过：未叠加 Droidspaces 层"
+fi
 
 section "7. 原厂保真核对（原厂 =y / =m 一个都不许丢）"
 python3 "$REPO_ROOT/scripts/check_config.py" \
@@ -223,12 +242,16 @@ apply_patch() {
         exit 1
     fi
 }
+if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
 if [ -f net/netfilter/xt_qtaguid.c ]; then
     apply_patch "$REPO_ROOT/patches/01-fix-xt-qtaguid-panic.patch" "xt_qtaguid panic 修复"
 else
     echo "  skip: 本树无 xt_qtaguid，panic 路径不存在"
 fi
 apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复"
+else
+    echo "  跳过 Droidspaces 运行期补丁（DROIDSPACES_LAYER=0）"
+fi
 
 # 原厂 41 个 vendor .ko 是用小米自己的 4.19.157 树编的，本树 genksyms 算出的 CRC
 # 与之普遍不同（struct file/net/tracepoint 等被回移过）。严格校验会让 WiFi

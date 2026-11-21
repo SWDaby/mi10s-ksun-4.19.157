@@ -19,14 +19,22 @@ on:
         description: 'Load stock vendor modules even when symbol CRCs differ (1=yes)'
         required: false
         default: '1'
+      droidspaces_layer:
+        description: 'Apply the Droidspaces config layer (0 = pure stock config, diagnostic)'
+        required: false
+        default: '1'
+      disable_relr:
+        description: 'Disable CONFIG_RELR to match the stock build (1=yes)'
+        required: false
+        default: '1'
 
 concurrency:
-  group: thyme-droidspaces
+  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: thyme / ${{ inputs.defconfig }}
+    name: thyme / layer=${{ inputs.droidspaces_layer }} crc=${{ inputs.allow_crc_mismatch }} relr_off=${{ inputs.disable_relr }}
     runs-on: ubuntu-22.04
     timeout-minutes: 180
 
@@ -75,6 +83,8 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
           DEFCONFIG: ${{ inputs.defconfig }}
           ALLOW_CRC_MISMATCH: ${{ inputs.allow_crc_mismatch }}
+          DROIDSPACES_LAYER: ${{ inputs.droidspaces_layer }}
+          DISABLE_RELR: ${{ inputs.disable_relr }}
         run: bash scripts/configure.sh
 
       - name: Build kernel Image
