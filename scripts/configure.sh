@@ -206,6 +206,16 @@ section "2.5 版本串：与原厂 vermagic 完全一致"
 "$KCFG" --file "$CFG" -e SMP -e PREEMPT -e MODULE_UNLOAD -e MODVERSIONS
 "$KCFG" --file "$CFG" --set-str LOCALVERSION "$LOCALVERSION_STR"
 "$KCFG" --file "$CFG" -d LOCALVERSION_AUTO
+# 标准 4.19 / ACK 的 scripts/setlocalversion 末尾是：
+#   if test "${LOCALVERSION+set}" != "set"; then scm=$(scm_version --short); res="$res${scm:++}"; fi
+# 在“非 tag 的浅克隆”上 scm_version --short 返回空，于是版本串被追加一个 "+"，
+# 变成 4.19.157-perf-g9d90dd04aa7c+ —— 原厂 .ko 的 vermagic 就永远对不上。
+# scm_version() 开头会先读 .scmversion，放一个空文件就能让它返回空串、不再追加 "+"。
+if [ -s "$KERNEL_DIR/.scmversion" ]; then
+    echo "  覆盖已有 .scmversion: $(cat "$KERNEL_DIR/.scmversion")"
+fi
+: > "$KERNEL_DIR/.scmversion"
+echo "  .scmversion 已清空（抑制 setlocalversion 追加 '+'）"
 # 只影响 vmlinux 调试段，不进 Image，也不影响符号 CRC；关掉省一半构建时间/磁盘。
 "$KCFG" --file "$CFG" -d DEBUG_INFO
 
@@ -227,6 +237,16 @@ echo "  kernelrelease = $REL"
 [ "$REL" = "$EXPECTED_RELEASE" ] || {
     echo "ERROR: 内核版本串不是 $EXPECTED_RELEASE"
     echo "       原厂 vendor 模块的 vermagic 会对不上，模块全部拒绝加载。"
+    exit 1
+}
+# 再用树里真实的 scripts/setlocalversion 验算一遍（编译时 Image 里的版本串就是它生成的）。
+# 这里能挡住 .scmversion 被覆盖、LOCALVERSION 被其它变量干扰之类的问题，
+# 不用等编完才在 Image 里发现多了一个 "+"。
+SCM="$( cd "$OUT" && sh "$KERNEL_DIR/scripts/setlocalversion" "$KERNEL_DIR" 2>/dev/null || true )"
+echo "  setlocalversion = '$SCM'"
+[ "$SCM" = "$LOCALVERSION_STR" ] || {
+    echo "ERROR: setlocalversion 生成的本地版本串不对（期望 '$LOCALVERSION_STR'）"
+    echo "       编出来的 vermagic 会多出后缀，原厂 vendor 模块全部拒绝加载。"
     exit 1
 }
 
