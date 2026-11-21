@@ -35,9 +35,13 @@ on:
         description: 'Skip the stock-fidelity gate (1=yes, diagnostic builds only)'
         required: false
         default: '0'
+      disable_arm64_hardening:
+        description: 'Disable SW_TTBR0_PAN / HARDEN_BRANCH_PREDICTOR / HARDEN_EL2_VECTORS (1=yes)'
+        required: false
+        default: '0'
 
 concurrency:
-  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}
+  group: thyme-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}-${{ inputs.disable_arm64_hardening }}
   cancel-in-progress: true
 
 jobs:
@@ -95,6 +99,7 @@ jobs:
           DISABLE_RELR: ${{ inputs.disable_relr }}
           DISABLE_KASLR: ${{ inputs.disable_kaslr }}
           ALLOW_CONFIG_DRIFT: ${{ inputs.allow_config_drift }}
+          DISABLE_ARM64_HARDENING: ${{ inputs.disable_arm64_hardening }}
         run: bash scripts/configure.sh
 
       - name: Build kernel Image

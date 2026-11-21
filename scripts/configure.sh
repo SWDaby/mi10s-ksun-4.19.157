@@ -82,6 +82,17 @@ else
     echo "  KASLR: 保留（DISABLE_KASLR=0，与原厂一致）"
 fi
 
+# 早期 alternatives 补丁：这三项都在 setup_arch 阶段用 alternative 机制
+# 改写异常向量/uaccess 代码，发生时间早于任何控制台输出。本树作者自己的
+# thyme 配置把三项全关了；换 LLD 后若补丁点位对不上，就是「无输出卡 logo」。
+if [ "${DISABLE_ARM64_HARDENING:-0}" = "1" ]; then
+    "$KCFG" --file "$CFG" -d ARM64_SW_TTBR0_PAN
+    "$KCFG" --file "$CFG" -d HARDEN_BRANCH_PREDICTOR
+    "$KCFG" --file "$CFG" -d HARDEN_EL2_VECTORS
+    echo "  ARM64 早期加固: 关闭 SW_TTBR0_PAN / HARDEN_BRANCH_PREDICTOR / HARDEN_EL2_VECTORS"
+    export INTENTIONAL_OFF_EXTRA="${INTENTIONAL_OFF_EXTRA:-} CONFIG_ARM64_SW_TTBR0_PAN CONFIG_HARDEN_BRANCH_PREDICTOR CONFIG_HARDEN_EL2_VECTORS"
+fi
+
 if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
     echo "  模式: 不叠加 Droidspaces 层（纯原厂配置对照构建）"
 else
