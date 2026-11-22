@@ -132,6 +132,7 @@ jobs:
             dist/config-diff.txt
             dist/stock-check.txt
             dist/Module.symvers
+            dist/System.map
             dist/crc-mode.txt
             dist/build.log
           if-no-files-found: warn

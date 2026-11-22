@@ -64,6 +64,9 @@ else
 fi
 # 同时保存导出的符号 CRC 清单，供与原厂 Image 做 MODVERSIONS 兼容性比对。
 [ -f "$OUT/Module.symvers" ] && cp "$OUT/Module.symvers" "$DIST/Module.symvers" || true
+# 符号表：真机卡死时没有任何日志，只能靠 QEMU + gdb 抓 PC，再把地址翻译成函数名。
+# System.map 只有几 MB，比 vmlinux 小得多，上传成本低。
+[ -f "$OUT/System.map" ] && cp "$OUT/System.map" "$DIST/System.map" || echo "  WARN: 没有 System.map"
 
 section "3. 打包 AnyKernel3（仅 Image）"
 rm -rf "$DIST/ak3"
