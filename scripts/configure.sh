@@ -106,6 +106,16 @@ if [ "${QEMU_PROBE:-0}" = "1" ]; then
         -e POWER_RESET \
         -e POWER_RESET_SYSCON
     echo "  QEMU 探针: PL011 串口已打开（仅本地验证，不要刷真机）"
+
+    # QEMU 没有高通 SCM：setup_arch -> init_random_pool -> scm_call2 会触发
+    # undefined instruction，而这么早的阶段 sigqueue 缓存还没建好，undef
+    # 处理本身就会在 kmem_cache_alloc 里空指针 oops。探针版直接跳过这次
+    # SCM 调用，只为让 QEMU 继续验证后面的通用启动路径；真机版本不受影响。
+    if grep -q 'init_random_pool();' "$KERNEL_DIR/arch/arm64/kernel/setup.c"; then
+        sed -i 's/^[[:space:]]*init_random_pool();/	\/* qemu probe: skip qcom scm random pool *\//' \
+            "$KERNEL_DIR/arch/arm64/kernel/setup.c"
+        echo "  QEMU 探针: 已跳过 init_random_pool()（QEMU 无高通 SCM）"
+    fi
 fi
 
 if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
