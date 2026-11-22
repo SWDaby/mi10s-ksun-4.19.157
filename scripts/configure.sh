@@ -389,11 +389,16 @@ else
     echo "  skip: 本树无 xt_qtaguid，panic 路径不存在"
 fi
 apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复" "${PATCH_OPTIONAL:-0}"
-# 本树的 cgroup 核心已回移到 5.x（struct cgroup 没有 id，id 在 kernfs 里），
-# 但 net/core/netprio_cgroup.c 还是 4.19 的 css->cgroup->id 写法。
-# 不修就编不过，CONFIG_CGROUP_NET_PRIO 也就打不开。
+# netprio 补丁只对「cgroup 核心已回移到 5.x」的树有意义：那种树里
+# struct cgroup 没有 id，id 在 kernfs 节点上，必须改用 cgroup_id()。
+# 原生的 4.19 树（比如 PixelExperience 的 thyme）里 css->cgroup->id 本来就是对的，
+# 打这个补丁反而会编译失败（没有 cgroup_id()）。
 if [ -f net/core/netprio_cgroup.c ]; then
-    apply_patch "$REPO_ROOT/patches/04-fix-netprio-cgroup-id.patch" "net_prio cgroup 改用 cgroup_id()" "${PATCH_OPTIONAL:-0}"
+    if grep -q 'cgroup_id(struct cgroup' include/linux/cgroup.h 2>/dev/null; then
+        apply_patch "$REPO_ROOT/patches/04-fix-netprio-cgroup-id.patch" "net_prio cgroup 改用 cgroup_id()" "${PATCH_OPTIONAL:-0}"
+    else
+        echo "  skip: 本树是 4.19 原生 cgroup（cgroup->id 仍在），不需要 netprio 补丁"
+    fi
 fi
 else
     echo "  跳过 Droidspaces 运行期补丁（DROIDSPACES_LAYER=0）"
