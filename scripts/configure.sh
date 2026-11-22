@@ -229,6 +229,17 @@ echo "  .scmversion 已清空（抑制 setlocalversion 追加 '+'）"
 # 只影响 vmlinux 调试段，不进 Image，也不影响符号 CRC；关掉省一半构建时间/磁盘。
 "$KCFG" --file "$CFG" -d DEBUG_INFO
 
+section "2.6 原厂模块兼容项（vendor .ko 的符号/行为依赖）"
+# 这三项原厂都是开的，PE 的 thyme_defconfig 没开。缺了不影响内核启动，
+# 但会让原厂 vendor 模块加载失败，或行为与原厂不一致：
+#   DYNAMIC_DEBUG  -> 导出 __dynamic_pr_debug / __dynamic_dev_dbg。
+#                     原厂 26 个 audio_*.ko 全部引用，缺了整组音频模块拒绝加载
+#                     （实测 dmesg: "Unknown symbol __dynamic_pr_debug"）。
+#   HZ_250         -> 原厂 250Hz tick，PE 默认 300Hz。
+#   ZRAM_WRITEBACK -> MIUI 内存扩展（zram 写回）依赖。
+"$KCFG" --file "$CFG" -e DYNAMIC_DEBUG -e HZ_250 -d HZ_300 -e ZRAM_WRITEBACK
+echo "  DYNAMIC_DEBUG / HZ_250 / ZRAM_WRITEBACK 已按原厂打开"
+
 section "3. olddefconfig"
 "${MK[@]}" olddefconfig
 
@@ -239,6 +250,19 @@ done
 LINES=$(wc -l < "$CFG")
 echo "  .config 行数: $LINES"
 [ "$LINES" -gt 3500 ] || { echo "ERROR: .config 行数异常偏少，基线 config 可能未生效"; exit 1; }
+
+# 原厂 vendor 模块的硬依赖，olddefconfig 之后必须仍然存活。
+grep -qx "CONFIG_DYNAMIC_DEBUG=y" "$CFG" || {
+    echo "ERROR: CONFIG_DYNAMIC_DEBUG=y 没生效"
+    echo "       26 个原厂 audio_*.ko 都引用 __dynamic_pr_debug / __dynamic_dev_dbg，会整组加载失败。"
+    exit 1
+}
+grep -qx "CONFIG_HZ=250" "$CFG" || {
+    echo "ERROR: CONFIG_HZ 不是 250（与原厂不一致）"
+    grep -E '^CONFIG_HZ' "$CFG" | sed 's/^/  /'
+    exit 1
+}
+echo "  OK: DYNAMIC_DEBUG=y / HZ=250（与原厂一致）"
 
 section "4.5 内核版本串核对"
 # 直接从 Makefile + .config 推算，避免 O= 构建下 setlocalversion 路径问题。
@@ -357,6 +381,42 @@ if [ "${ALLOW_CRC_MISMATCH:-1}" = "1" ]; then
 else
     echo "  模式: 严格 CRC 校验（ALLOW_CRC_MISMATCH=0）"
 fi
+
+section "8.5 原厂 vendor 模块兼容 stub（xlogchar_kwrite）"
+# 原厂内核开了 CONFIG_XLOGCHAR（小米 /dev/xlogchar 调试日志字符设备），本树没有这份源码。
+# 原厂 audio_cs35l41.ko（扬声器智能功放）和 audio_wcd938x.ko（耳机/扬声器编解码）
+# 引用了 xlogchar_kwrite()，缺这个导出符号这两个模块就加载失败（实测 dmesg 报
+# "Unknown symbol xlogchar_kwrite"），表现为没有外放/耳机声音。
+# 该函数在原厂也只用于把音频调试日志写进 xlog 缓冲区，返回值不参与任何控制流，
+# 所以补一个空实现即可；不引入任何新行为。
+XLOG_STUB="$KERNEL_DIR/drivers/misc/xlogchar_stub.c"
+if [ ! -f "$XLOG_STUB" ]; then
+    cat > "$XLOG_STUB" <<'STUB_EOF'
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * 原厂 CONFIG_XLOGCHAR 的兼容空实现。
+ * 原厂 vendor 模块 audio_cs35l41.ko / audio_wcd938x.ko 引用 xlogchar_kwrite()，
+ * 缺这个导出符号会导致它们加载失败（无外放/耳机）。原厂里该函数只写调试日志，
+ * 返回值不参与控制流，因此空实现即可。
+ */
+#include <linux/module.h>
+#include <linux/types.h>
+
+int xlogchar_kwrite(const char *buf, int len)
+{
+	return 0;
+}
+EXPORT_SYMBOL(xlogchar_kwrite);
+STUB_EOF
+    echo "  已生成 drivers/misc/xlogchar_stub.c"
+else
+    echo "  drivers/misc/xlogchar_stub.c 已存在，跳过"
+fi
+grep -q 'xlogchar_stub\.o' "$KERNEL_DIR/drivers/misc/Makefile" \
+    || echo 'obj-y += xlogchar_stub.o' >> "$KERNEL_DIR/drivers/misc/Makefile"
+grep -q 'xlogchar_stub\.o' "$KERNEL_DIR/drivers/misc/Makefile" \
+    || { echo "ERROR: drivers/misc/Makefile 没登记 xlogchar_stub.o"; exit 1; }
+echo "  drivers/misc/Makefile 已登记 xlogchar_stub.o"
 
 section "9. 存档：最终配置 + 与原厂配置的差异"
 cp "$CFG" "$DIST/config-final.txt"

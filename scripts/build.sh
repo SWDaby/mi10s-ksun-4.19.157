@@ -140,6 +140,22 @@ else
 fi
 # 同时保存导出的符号 CRC 清单，供与原厂 Image 做 MODVERSIONS 兼容性比对。
 [ -f "$OUT/Module.symvers" ] && cp "$OUT/Module.symvers" "$DIST/Module.symvers" || true
+
+# 原厂 vendor 模块的硬依赖符号：缺一个就是整组模块加载失败，必须在产物里确认导出。
+if [ -f "$OUT/Module.symvers" ]; then
+    missing_syms=""
+    for s in __dynamic_pr_debug __dynamic_dev_dbg xlogchar_kwrite; do
+        awk -F'\t' -v s="$s" '$2==s{f=1} END{exit !f}' "$OUT/Module.symvers" || missing_syms="$missing_syms $s"
+    done
+    if [ -n "$missing_syms" ]; then
+        echo "ERROR: 内核没有导出这些符号，原厂 vendor 模块会加载失败:$missing_syms"
+        echo "       检查 CONFIG_DYNAMIC_DEBUG 与 drivers/misc/xlogchar_stub.c"
+        exit 1
+    fi
+    echo "  vendor 模块依赖符号: __dynamic_pr_debug / __dynamic_dev_dbg / xlogchar_kwrite 均已导出 ✓"
+else
+    echo "  WARN: 没有 Module.symvers，跳过 vendor 依赖符号检查"
+fi
 # 符号表：真机卡死时没有任何日志，只能靠 QEMU + gdb 抓 PC，再把地址翻译成函数名。
 # System.map 只有几 MB，比 vmlinux 小得多，上传成本低。
 [ -f "$OUT/System.map" ] && cp "$OUT/System.map" "$DIST/System.map" || echo "  WARN: 没有 System.map"
