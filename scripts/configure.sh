@@ -243,11 +243,11 @@ section "2.6 原厂模块兼容项（vendor .ko 的符号/行为依赖）"
 "$KCFG" --file "$CFG" -e DYNAMIC_DEBUG -e HZ_250 -d HZ_300 -e ZRAM_WRITEBACK
 echo "  DYNAMIC_DEBUG / HZ_250 / ZRAM_WRITEBACK 已按原厂打开"
 
-# XLOGCHAR 必须关掉，改由 drivers/misc/xlogchar_stub.c 提供 xlogchar_kwrite()。
-# drivers/char/xlogchar.c 也导出同名符号，一旦 CONFIG_XLOGCHAR=y 就会和 stub 撞车：
-#   ld.lld: error: duplicate symbol: xlogchar_kwrite
-# 原厂 .ko 只要求这个符号存在、返回 0，不需要 /dev/xlogchar 本身。
-"$KCFG" --file "$CFG" -d XLOGCHAR
+# 注意：CONFIG_XLOGCHAR 保持原厂的 =y，不要关。
+# 本树有 drivers/char/xlogchar.c，它自己导出 xlogchar_kwrite()（原厂 .ko 要的符号），
+# CRC 也是按它算出来的，最贴近原厂。之前额外加的 drivers/misc/xlogchar_stub.c
+# 会和它撞符号（duplicate symbol: xlogchar_kwrite），所以 stub 只在
+# CONFIG_XLOGCHAR 关掉时才生成（见 section 8.5）。
 
 section "3. olddefconfig"
 "${MK[@]}" olddefconfig
@@ -273,12 +273,10 @@ grep -qx "CONFIG_HZ=250" "$CFG" || {
 }
 echo "  OK: DYNAMIC_DEBUG=y / HZ=250（与原厂一致）"
 
-# XLOGCHAR 只能由 drivers/misc/xlogchar_stub.c 提供，不能让 drivers/char/xlogchar.c 也编进来
-# （两边都导出 xlogchar_kwrite，链接期直接 duplicate symbol）。
-# 这里只告警不中断：section 8.5 会按最终配置决定要不要放 stub。
+# XLOGCHAR：原厂 =y，本树 drivers/char/xlogchar.c 自带 xlogchar_kwrite()，
+# 所以 stub 会跳过（section 8.5 按最终配置决定）。这里只记录实际状态。
 if grep -qE "^CONFIG_XLOGCHAR=(y|m)$" "$CFG"; then
-    echo "  WARN: CONFIG_XLOGCHAR 被打开了（-d 没压住，可能是被 select），stub 将跳过"
-    grep -E '^CONFIG_XLOGCHAR' "$CFG" | sed 's/^/        /'
+    echo "  OK: CONFIG_XLOGCHAR 沿用原厂（xlogchar_kwrite 由内核自身提供，stub 跳过）"
 else
     echo "  OK: CONFIG_XLOGCHAR 关闭（xlogchar_kwrite 由 stub 提供）"
 fi
@@ -421,12 +419,13 @@ else
 fi
 
 section "8.5 原厂 vendor 模块兼容 stub（xlogchar_kwrite）"
-# 原厂内核开了 CONFIG_XLOGCHAR（小米 /dev/xlogchar 调试日志字符设备），本树没有这份源码。
-# 原厂 audio_cs35l41.ko（扬声器智能功放）和 audio_wcd938x.ko（耳机/扬声器编解码）
-# 引用了 xlogchar_kwrite()，缺这个导出符号这两个模块就加载失败（实测 dmesg 报
-# "Unknown symbol xlogchar_kwrite"），表现为没有外放/耳机声音。
-# 该函数在原厂也只用于把音频调试日志写进 xlog 缓冲区，返回值不参与任何控制流，
-# 所以补一个空实现即可；不引入任何新行为。
+# 原厂内核开了 CONFIG_XLOGCHAR，原厂 audio_cs35l41.ko（扬声器智能功放）和
+# audio_wcd938x.ko（耳机/扬声器编解码）引用 xlogchar_kwrite()，缺这个导出符号
+# 这两个模块就加载失败（dmesg 报 "Unknown symbol xlogchar_kwrite"），表现为没有
+# 外放/耳机声音。
+# 本树有 drivers/char/xlogchar.c，正常情况 CONFIG_XLOGCHAR=y 时符号由它提供，
+# 下面整段跳过。只有当某次基线把 CONFIG_XLOGCHAR 关掉、符号会缺失时，才补一个
+# 空实现（原厂里该函数只写调试日志，返回值不参与控制流）。
 XLOG_STUB="$KERNEL_DIR/drivers/misc/xlogchar_stub.c"
 if grep -qE "^CONFIG_XLOGCHAR=(y|m)$" "$CFG"; then
     # 内核自己带了 drivers/char/xlogchar.c，符号已经有了，再放 stub 就是重复定义。
