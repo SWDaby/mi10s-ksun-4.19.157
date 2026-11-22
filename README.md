@@ -1,139 +1,133 @@
-# thyme (Mi 10S) Droidspaces 内核 —— GitHub Actions 构建包
+# thyme（小米 10S）Droidspaces 内核构建
 
-原厂基线：`V14.0.6.0.TGACNXM`（MIUI 14 / Android 13，kernel 4.19.157-perf-g9d90dd04aa7c）
-基座源码：`KirinNova/android_kernel_xiaomi_sm8250`，固定 commit `9b55ba0`（4.19.325，CAF + MIUI 树）
-基座配置：`arch/arm64/configs/thyme_stock-defconfig`（该树维护者按原厂 config 移植的完整转储）
-核对基准：`config/stock-4.19.157-thyme.config`（从你手机原厂 boot 的 IKCONFIG 解出的真 config，只用于逐项核对）
+在**原厂内核配置**上叠加最小的 Droidspaces 配置层，产出可直接替换 `boot.img` 中 kernel 段的 `Image`。
+目标设备：Xiaomi Mi 10S（`thyme`，SM8250），MIUI `V14.0.6.0.TGACNXM`（Android 13，API 33）。
 
----
+## 一、基线
 
-## 一、这个包做什么
-
-| 步骤 | 内容 |
+| 项 | 值 |
 | --- | --- |
-| 配置层 | 以树自带 `thyme_stock-defconfig` 为底，只叠加 Droidspaces 官方 non-GKI 清单（命名空间 / cgroup / devtmpfs / veth+bridge+macvlan / netfilter） |
-| 树结构必需 | `ANDROID_VENDOR_HOOKS=y`：这棵树里 `arch/arm64/net/bpf_jit_comp.c` 等代码**无条件**调用 `trace_android_vh_*`，而 `vendor_hooks.h` 关闭该选项时指向本树不存在的 `DECLARE_EVENT_NOP` → 不开就编译失败。开的是静态键 tracepoint，没人注册时零开销 |
-| 树结构必需 | `MACH_XIAOMI_THYME=y`：这棵树把小米私有充电/电池驱动（IDT P9415 / RX1619 无线充、BQ2597X 电荷泵、LN8282、DS28E16 电池验真、1-wire）挂在 `CONFIG_MACH_XIAOMI` 的目录门控下，而原厂 config 转储里没有这个新符号 → 不开启时这些驱动**符号是 `=y` 但文件根本不编译**（链接期报 `idtp_op_ble_flag` 未定义），无线充/电荷泵/电池验真会静默丢失 |
-| 还原原厂 | `BOOTUP_RECLAIM=y`、`BRIDGE_IGMP_SNOOPING=y`（原厂 y，树自带移植漏了）；`BLK_WBT`、`IOSCHED_BFQ` 关掉（原厂 n，树自带移植多开了） |
-| 关闭项 | `ANDROID_PARANOID_NETWORK`（Droidspaces 硬性要求；`PERF_HUMANTASK` 原厂本来就是关的，不用动） |
-| 补丁 | `01` xt_qtaguid 内核 panic 修复；`02` cgroup 文件前缀恢复 |
-| 构建期 | `LOCALVERSION_AUTO=n`、`DEBUG_INFO=n`（不进 Image，只提速） |
-| 产物 | `Image`、`AnyKernel3-thyme-droidspaces.zip`、`config-final.txt`、`config-diff.txt`（与原厂配置逐行差异）、`stock-gaps.txt`、`build.log` |
-| **不做** | 不碰 `vendor_boot` / `dtbo` / `vbmeta` / ramdisk；AnyKernel3 只写 `Image`，不写 dtb |
+| 源码 | `PixelExperience-Devices/kernel_xiaomi_thyme` |
+| 分支 / commit | `thirteen` / `bc9f46dca6f2d608578180543cc2ff9ee5ee8a82` |
+| defconfig | `thyme_defconfig`（4.19.157） |
+| 编译器 | AOSP Clang r416183b（12.0.5）+ LLD 12.0.5 |
+| 目标版本串 | `4.19.157-perf-g9d90dd04aa7c`（与原厂 `uname -r` 完全一致） |
 
-> 配置阶段全是硬断言，任何一项不满足都在编译前红叉：Droidspaces 关键项存活、必须关闭项没被 Kconfig 重新打开、关键驱动没变成 `=m`、**原厂 `=y` 的 228 个硬件符号一个都不许掉**、**小米私有充电/电池 12 个驱动符号必须真的被编进来**、补丁能干净应用。
+> `moon_sm8250` 那棵树（`thyme_stock-defconfig`、4.19.325）**不是**这台机器的基线，构建会失败或功能缺失。
 
-> `01` 补丁会自动跳过：原厂 config 里没有 `CONFIG_NETFILTER_XT_MATCH_QTAGUID`，该内核树也没有 `net/netfilter/xt_qtaguid.c`，panic 路径本来就不存在。补丁仍留在仓库里备查，脚本用 `git apply --check` 判断，不适用就跳过、不硬套。
+## 二、做了什么
 
-> 为什么只换 Image：实测 `boot.img` 是 header **v3**（v3 结构里没有 dtb 字段）、kernel 内无 FDT，三个完整 kona DTB 都在 `vendor_boot.img` 里。只换 Image = 硬件初始化路径 100% 原厂。已用 Python 重打包工具做过**空跑验证**：用原厂 kernel 往返重打包，输出与 `m10s_boot.img` MD5 完全一致（03A3BE9B…）；再换成 60MB 假 kernel 验证扩容路径，ramdisk 逐字节不变、vbmeta 自动搬移且 footer 指针同步更新。
+| 类别 | 内容 |
+| --- | --- |
+| 配置基线 | 直接使用 `thyme_defconfig`（原厂配置转储），不换树、不改硬件驱动 |
+| 容器层 | `USER_NS=y`、`CFS_BANDWIDTH=y`、`CGROUP_NET_PRIO=y`、`POSIX_MQUEUE`、各 namespace、`CGROUP_DEVICE/PIDS`、`DEVTMPFS`、`OVERLAY_FS`、`VETH/BRIDGE/MACVLAN`、`NF_TABLES`、`IP_NF_TARGET_MASQUERADE` |
+| 保持关闭 | `SYSVIPC=n`、`IP6_NF_NAT=n`、`NF_NAT_IPV6=n`、`IP6_NF_TARGET_MASQUERADE=n`（见第四节） |
+| 版本串 | `LOCALVERSION="-perf-g9d90dd04aa7c"` + 空 `.scmversion`，`uname -r` 与原厂一致 |
+| 安全特性 | 关闭 `RELR`、`RANDOMIZE_BASE`（KASLR），与原厂构建一致 |
+| CRC | 打 `03-allow-crc-mismatch.patch`，原厂 vendor `.ko` 的符号 CRC 不符时只告警、不拒绝加载 |
+| 产物 | `Image`、`AnyKernel3` 包、`config-final.txt`、`config-base.txt`、`config-diff.txt`、`Module.symvers`、`System.map`、`build.log` |
 
----
+补丁说明：
 
-## 二、上传到 GitHub（一次性，约 3 分钟）
-
-1. 新建仓库：<https://github.com/new>
-   - 名字随意，例如 `thyme-droidspaces`
-   - **Private / Public 都行**（Private 免费额度 2000 分钟/月，本构建约 40–60 分钟）
-   - 不要勾 `Add a README`（避免冲突）
-2. 点 **Add file → Upload files**
-3. 把本目录（`droidspaces-kernel`）里的**全部文件和文件夹**拖进去（`.github`、`scripts`、`config`、`patches`、`anykernel`、`README.md`）
-   - 网页上传支持拖文件夹；若拖拽不成功，就在本地把这几个目录逐个上传
-4. 点 **Commit changes**
+| 补丁 | 作用 | 适用条件 |
+| --- | --- | --- |
+| `01-fix-xt-qtaguid-panic` | 修复 xt_qtaguid 引用计数导致的 panic | 仅当内核树存在 `xt_qtaguid.c` 时应用，否则跳过 |
+| `02-fix-cgroup-file-prefix` | 恢复 cgroup 文件前缀 | 总是应用 |
+| `03-allow-crc-mismatch` | 符号 CRC 不匹配降级为警告 | `allow_crc_mismatch=1` 时应用 |
+| `04-fix-netprio-cgroup-id` | 适配 5.x 风格 `cgroup_id()` | 仅当存在 `cgroup_id(struct cgroup *)` 时应用，4.19 跳过 |
 
 ## 三、跑构建
 
-1. 仓库页 → **Actions** → 左边选 **Build thyme Droidspaces kernel** → 右边 **Run workflow**
-2. 三个输入保持默认即可（仓库地址、固定 commit `9b55ba0`、`thyme_stock-defconfig`），点绿色 **Run workflow**
-3. 等 40–60 分钟。**配置断言失败会在前 5 分钟就红叉**，日志里会直接写哪一项没存活
-4. 绿勾后，进这次 run 页面底部 **Artifacts** → 下载 `thyme-droidspaces-<编号>.zip`
-5. 把下载到的 zip 放到 `C:\Users\Administrator\Desktop\mi10s\`，告诉我 —— 我本地做最后一步：用原厂 `m10s_boot.img` 重打包出 `boot-droidspaces.img`（逐字节校验 ramdisk 未变、dtb 段未变），并核对 `Image` 的版本串与 config
+Actions → **Build thyme Droidspaces kernel** → Run workflow，**所有输入都要显式给值**（漏传会静默落回错误树的默认值）：
 
----
-
-## 四、刷机
-
-产物有两种刷法，任选：
-
-**A. 电脑 fastboot（最直接）**
-```powershell
-fastboot flash boot boot-droidspaces.img
-fastboot reboot
 ```
-> 注意：本镜像的 ramdisk 是原厂 ramdisk。如果你现在是 Magisk 打补丁的 boot，刷完会掉 root，开机后进 Magisk App → 安装 → 选择并修补文件 → 选 `boot-droidspaces.img` → 再 `fastboot flash boot` 一次即可（内核不会被 Magisk 改掉）。
-
-**B. 手机上刷（保住现有 Magisk）**
-用任意支持 AnyKernel3 的内核刷写器（Kernel Flasher / EX Kernel Manager / TWRP）刷 `AnyKernel3-thyme-droidspaces.zip`：
-解包**当前** boot → 只换 kernel → 回写。Magisk 补丁的 ramdisk 会被保留，AK3 会自动做 Magisk 兼容处理。
-
-**回退（30 秒）**
-```powershell
-fastboot flash boot m10s_boot.img
+kernel_repo          = https://github.com/PixelExperience-Devices/kernel_xiaomi_thyme
+kernel_branch        = bc9f46dca6f2d608578180543cc2ff9ee5ee8a82
+defconfig            = thyme_defconfig
+allow_crc_mismatch   = 1
+droidspaces_layer    = 1
+disable_relr         = 1
+disable_kaslr        = 1
+allow_config_drift   = 1
+disable_arm64_hardening = 0
+qemu_probe           = 0     # 必须为 0，探测镜像不可刷机
 ```
 
----
+- `allow_config_drift=1`：仓库里的 `config/stock-4.19.157-thyme.config` 是另一棵树的原厂配置，
+  与 PE thyme 基线不匹配，该保真门禁对本基线无效；改回 `0` 会在配置阶段失败。
+- FCM 门禁不受 `allow_config_drift` 影响，始终生效（配置阶段 + 编译后各检查一次）。
 
-## 五、刷完怎么验收
+本地等价命令：
+
+```powershell
+gh workflow run build.yml `
+  -f kernel_repo=https://github.com/PixelExperience-Devices/kernel_xiaomi_thyme `
+  -f kernel_branch=bc9f46dca6f2d608578180543cc2ff9ee5ee8a82 `
+  -f defconfig=thyme_defconfig `
+  -f allow_crc_mismatch=1 -f droidspaces_layer=1 `
+  -f disable_relr=1 -f disable_kaslr=1 `
+  -f allow_config_drift=1 -f disable_arm64_hardening=0 -f qemu_probe=0
+```
+
+## 四、为什么 SYSVIPC / IPv6 NAT 必须为 n
+
+Android 13 的 `Build.isBuildConsistent()` 在 Treble 设备上等价于
+`VintfObject.verifyWithoutAvb() == 0`，它用 `/system/etc/vintf/compatibility_matrix.5.xml`
+里 `<kernel version="4.19.110" level="5">` 的 **251 项**逐项核对内核配置。
+`SYSVIPC` 与 `IP6_NF_NAT` 在原厂内核里都是 `n`，早期版本为了容器打开后，开机就会弹
+“There's an internal problem with your device”。
+
+- 仓库内置 `config/fcm-4.19.110-level5.txt`（251 项要求），`scripts/check_fcm.py` 做比对，
+  配置阶段和编译后都会跑；不满足直接编译失败。
+- IPv6 NAT 只是 Droidspaces 的 `OPTIONAL` 项，容器 `--net=nat` 走 IPv4 MASQUERADE，不受影响。
+- `SYSVIPC=n` 与原厂一致；容器里依赖 SysV 共享内存的程序（如 PostgreSQL 默认配置）会失败，
+  Ubuntu 24.04 Minimal + systemd 无影响。
+
+## 五、已验证结果
+
+| 项 | 结果 |
+| --- | --- |
+| 构建 | Actions run `45025799106`，13m49s，success |
+| `Image` | 49,317,904 B，MD5 `AC660034815E558F926689F4FBB349D2` |
+| 导出符号 | 13,873 个；相对上一版仅移除 6 个 `nf_nat_*ipv6*`，0 新增；41 个原厂 `.ko` 均不引用 |
+| FCM | 251 项全部满足（含运行时 `/proc/config.gz` 实算） |
+| 开机弹窗 | 无 `VintfObject ... returns 1`、无 `Build fingerprint is not consistent` |
+| 原厂功能 | WiFi / 相机 / 指纹 / 触控 / 充电 / 音频 全部 PASS |
+| 容器 | systemd `running`、`--failed` 空、eth0 NAT、`curl https://www.baidu.com/` = 200 |
+
+`Image` 打上 folkpatch（KernelPatch 0.13.9，2026-10-30 构建，空超级密钥）后重打包为
+`boot-P8-folkpatch.img`（MD5 `F7E2743CAC8D57D9489BFB7938FD7FB8`），已刷入并验证；
+不带 root 的 `boot-P8-stock.img` MD5 为 `67F5E7337DB2F153951035FB69B8C2BB`
+（与上一版相同，因为内核代码未变，只有 root 补丁变了）。
+
+> 交付镜像与验证日志保存在构建仓库之外的本地项目中，仓库只保存构建脚本与配置。
+
+## 六、目录
+
+```
+.github/workflows/build.yml        Actions 流程（全部输入见第三节）
+scripts/configure.sh               基线 config + Droidspaces 层 + 断言 + FCM 门禁
+scripts/build.sh                   编译 + 编译后 FCM 复核 + 打 AnyKernel3
+scripts/check_config.py            原厂配置保真核对
+scripts/check_fcm.py               FCM 251 项比对（可用 --simulate 做离线推演）
+scripts/gen_fcm_bundle.py          从 compatibility_matrix XML 生成比对清单
+scripts/patch_crc.py               CRC 降级补丁生成器
+config/fcm-4.19.110-level5.txt     设备 FCM 要求清单
+config/stock-4.19.157-thyme.config 原厂配置转储（仅核对用，不是基线）
+patches/                           4 个源码补丁
+anykernel/anykernel.sh             只写 Image，不写 dtb/dtbo
+```
+
+## 七、重打 root 补丁
+
+换内核会掉 root：KernelPatch 补丁直接嵌在 kernel 里。用管理器自带的 `kptools` + `kpimg`
+对编译出来的 `Image` 重新打一遍即可，不需要改 ramdisk：
 
 ```bash
-uname -r                                   # 应为 4.19.325-cip135-st19-perf+
-zcat /proc/config.gz | grep -E 'CONFIG_(PID_NS|IPC_NS|USER_NS|SYSVIPC|DEVTMPFS|MACVLAN|NF_TABLES|CGROUP_DEVICE|CGROUP_PIDS|CFS_BANDWIDTH)='
-zcat /proc/config.gz | grep -E 'PARANOID|HUMANTASK'   # 两项都应为 "is not set"
+kptools -p -i Image -k <kpimg> -o Image.patched     # 空超级密钥时不传 -s
+kptools -l -i Image.patched                         # 应显示 patched=true
 ```
 
-1. Droidspaces App → **Check Requirements** 全绿
-2. 起容器：`ip addr` / `ping` / `apt update`（验 NAT、veth、iptables）、`ps`、`mount`（验 devtmpfs、cgroup）
-3. 原厂功能回归：通话、Wi-Fi、热点、相机前后摄、指纹、NFC、充电功率、zram（`cat /sys/block/zram0/mm_stat` 有数据）、触控增强
-4. 压力：容器内 `stress-ng --cpu 4` 看 CPU 配额是否生效（CFS_BANDWIDTH）
-
----
-
-## 六、已知差异与取舍
-
-**绕不过去的（基座树本身决定）**
-
-| 项 | 影响 | 说明 |
-| --- | --- | --- |
-| 4.19.325（原厂 4.19.157） | `uname -r` 变化；原厂 6 个非关键 vendor 模块（msm_rdbg / usb_gspca / dvb_mpq×2 / lcd_class / llcc_perfmon）CRC 不匹配会加载失败 | 全是非关键项，不影响开机与外设；`MODULE_SIG_FORCE=n`，不会因此拒绝启动 |
-| `sf_binder` / `emergency_memory` / `perf_critical_rt_task` | 原厂 `=y`，这棵树里没有对应符号（树已把这些功能重写/移除） | 只影响 MIUI 的性能提示与内存回收策略，不影响功能；`stock-gaps.txt` 里有完整清单 |
-| `millet`（应用冻结框架） | 树已把它拆成 7 个默认关闭的子项（`MILLET_CORE/BINDER/PKG/HS/SIG/CGROUP` + GKI 变体），维护者自己的 `thyme_defconfig` 也没开 | 保持维护者的默认（关了）；MIUI 冻结功能会退化但不影响开机。要试可以后续单独出一版打开 |
-| 关 `TOUCHSCREEN_ST`（保留 `TOUCHSCREEN_ST_FTS_V521`） | 无：两者是同源 fts 驱动（都注册 `st,fts`），只是 `st/` 是旧副本、`fts_521/` 是新版（FOD/手势/debugfs 都依赖它） | 同时开启必然 `duplicate symbol` 链接失败；维护者自己的 `thyme_defconfig` 同样只留 `FTS_V521`，触摸、指纹解锁、手势全部走 `FTS_V521` |
-
-**为容器改的**
-
-| 项 | 影响 | 说明 |
-| --- | --- | --- |
-| 关 `ANDROID_PARANOID_NETWORK` | 失去 AID_INET 组级网络限制 | 容器联网必需；per-uid 网络管控仍由 netd/eBPF 负责，所有 MIUI 定制内核都如此 |
-| 开 `USER_NS` | 增加内核攻击面 | 容器必需 |
-| 开 `ANDROID_VENDOR_HOOKS` | 多一批静态键 tracepoint | 树结构要求（见上），没人注册时零开销 |
-
-**不做**
-
-| 项 | 说明 |
-| --- | --- |
-| 不刷 dtb | 原厂 DTB 在 `vendor_boot`，本来就是这台机器的正确 DTB；只换 Image 让硬件初始化 100% 保持原厂 |
-
----
-
-## 七、目录说明
-
-```
-.github/workflows/build.yml     Actions 流程
-scripts/configure.sh            基线 config + Droidspaces 层 + 断言 + 打补丁
-scripts/build.sh                编译 Image + 打 AnyKernel3
-config/stock-4.19.157-thyme.config   从原厂 boot 的 IKCONFIG 解出的完整 config（只做核对，不当基线）
-patches/01-fix-xt-qtaguid-panic.patch
-patches/02-fix-cgroup-file-prefix.patch
-anykernel/anykernel.sh          只写 Image、不写 dtb/dtbo
-```
-
----
-
-## 八、本次构建结果（2026-11-20）
-
-- Actions run：[`44710961866`](https://github.com/jingbohi/thyme-droidspaces/actions/runs/44710961866)（commit `3efe9cd`，17m38s）
-- `Image`：45,084,688 字节；`Linux version 4.19.325-cip135-st19-perf+`（ZyC Clang 16.0.6 + LLD 16.0.6，SMP PREEMPT）
-- 配置核对：Droidspaces 关键项全 y；原厂 =y 的 228 个硬件符号 0 丢失；小米私有充电/电池 12 项全 y；原厂已无的符号仅 1 个（`FINGERPRINT_GOODIX_FOD_THY`）
-- 与原厂 config 逐行差异：380 行（`config-diff.txt`）
-- 重打包：`boot-droidspaces.img` MD5 `A0A1708333E63D4BE24F1080848485FE`，15 项校验全 PASS（只换 kernel，ramdisk / vbmeta / cmdline / 分区大小逐字节一致）
-
-> 版本串里的 `+` 是 kbuild 检测到工作树有未提交改动（我们的两个补丁）自动追加的，仅影响 `uname -r` 显示，不影响功能。
+再把 `Image.patched` 塞回原厂 `boot.img`（只替换 kernel 段）后刷入。
+管理器更新后若提示“内核补丁有新版本可用”，说明管理器内置的 `kpimg` 构建与 boot 里的不同；
+重新打补丁并刷入即可消除，root 本身不受影响。
