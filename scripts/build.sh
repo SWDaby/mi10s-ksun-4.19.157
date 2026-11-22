@@ -92,6 +92,16 @@ if [ "$SIZE" -lt 20000000 ] || [ "$SIZE" -gt 104857600 ]; then
     exit 1
 fi
 
+# 框架兼容矩阵复核：configure.sh 已查过一次，但 make 的 syncconfig 仍可能把
+# 被 select 的项重新打开（例如某个驱动 select 了 IP6_NF_NAT）。这里用 make
+# 实际使用的 .config 再核对一遍，不满足就直接失败，别等刷机才看到弹窗。
+if [ -f "$OUT/.config" ]; then
+    python3 "$REPO_ROOT/scripts/check_fcm.py" "$OUT/.config" \
+        || { echo "ERROR: 编译期 .config 与设备 FCM 不一致，开机会弹出 internal problem 对话框"; exit 1; }
+else
+    echo "  WARN: 没有 $OUT/.config，跳过 FCM 复核"
+fi
+
 VERSION_STR=$(strings -a "$IMG" | grep -m1 '^Linux version' || true)
 echo "  $VERSION_STR"
 case "$VERSION_STR" in

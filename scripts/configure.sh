@@ -126,9 +126,16 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 # CGROUP_NET_PRIO：本树的 net/core/netprio_cgroup.c 仍是 4.19 的 css->cgroup->id 写法，
 # 而 struct cgroup 已回移到 5.x（id 在 kernfs 里），直接打开必编译失败。
 # patches/04-fix-netprio-cgroup-id.patch 把它改成 cgroup_id() 后即可安全打开。
+# 以下四项官方清单里有，但必须保持原厂的 n，否则 Android 13 开机校验失败：
+#   FCM level 5（<kernel version="4.19.110">）要求 CONFIG_SYSVIPC=n、
+#   CONFIG_IP6_NF_NAT=n。不满足时 VintfObject.verifyWithoutAvb() 返回 1，
+#   Build.isBuildConsistent() 为 false，开机弹出
+#   "There's an internal problem with your device" 对话框。
+# 原厂内核实测就是这两个 n（IPv4 NAT 的 IP_NF_TARGET_MASQUERADE 仍为 y）。
+# IPv6 NAT 只是 Droidspaces 的 OPTIONAL 项，容器实际走 IPv4 MASQUERADE。
+# 末尾用 -d 再钉一次，防止 defconfig / select 把它们重新拉回 y。
 "$KCFG" --file "$CFG" \
     -e SYSCTL \
-    -e SYSVIPC \
     -e POSIX_MQUEUE \
     -e NAMESPACES \
     -e PID_NS \
@@ -169,14 +176,11 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e IP_NF_FILTER \
     -e NF_NAT \
     -e NF_NAT_IPV4 \
-    -e NF_NAT_IPV6 \
     -e NF_NAT_REDIRECT \
     -e IP_NF_NAT \
     -e IP6_NF_IPTABLES \
     -e IP6_NF_FILTER \
     -e IP6_NF_MANGLE \
-    -e IP6_NF_NAT \
-    -e IP6_NF_TARGET_MASQUERADE \
     -e IP_NF_TARGET_MASQUERADE \
     -e NF_TABLES \
     -e NETFILTER_XT_TARGET_TCPMSS \
@@ -208,7 +212,11 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e IP_MULTIPLE_TABLES \
     -e IPV6 \
     -e IPV6_MULTIPLE_TABLES \
-    -d ANDROID_PARANOID_NETWORK
+    -d ANDROID_PARANOID_NETWORK \
+    -d SYSVIPC \
+    -d IP6_NF_NAT \
+    -d IP6_NF_TARGET_MASQUERADE \
+    -d NF_NAT_IPV6
 fi
 
 section "2.5 版本串：与原厂 vermagic 完全一致"
@@ -318,7 +326,7 @@ section "5. 断言：Droidspaces 关键项必须存活"
 # 只列本树确实存在、且容器运行必需的项；可选/已被上游移除的项不在此列。
 if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
 CRITICAL=(
-    SYSVIPC POSIX_MQUEUE
+    POSIX_MQUEUE
     NAMESPACES PID_NS UTS_NS IPC_NS
     SECCOMP SECCOMP_FILTER
     CGROUPS CGROUP_DEVICE CGROUP_PIDS MEMCG CGROUP_SCHED
@@ -331,7 +339,7 @@ CRITICAL=(
     IP_NF_TARGET_MASQUERADE NETFILTER_XT_TARGET_TCPMSS
     NETFILTER_XT_MATCH_ADDRTYPE
     IP_ADVANCED_ROUTER IP_MULTIPLE_TABLES
-    IP6_NF_IPTABLES IP6_NF_NAT IP6_NF_TARGET_MASQUERADE
+    IP6_NF_IPTABLES
 )
 missing=0
 for s in "${CRITICAL[@]}"; do
@@ -344,8 +352,15 @@ done
 echo "  OK: ${#CRITICAL[@]} 项全部为 y"
 
 section "6. 断言：必须关闭的项"
-for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK; do
-    if grep -qx "CONFIG_${s}=y" "$CFG"; then
+# ANDROID_PARANOID_NETWORK / PERF_HUMANTASK：原厂就是关的。
+# SYSVIPC / IP6_NF_NAT / IP6_NF_TARGET_MASQUERADE / NF_NAT_IPV6：
+#   Android 13 的框架兼容矩阵（FCM level 5）要求 SYSVIPC=n、IP6_NF_NAT=n，
+#   原厂内核同样是 n。违反时 VintfObject.verifyWithoutAvb() 返回 1，
+#   开机会弹出 "There's an internal problem with your device"。
+#   注意 =m 也算违反（tristate 必须严格等于 n）。
+for s in ANDROID_PARANOID_NETWORK PERF_HUMANTASK \
+         SYSVIPC IP6_NF_NAT IP6_NF_TARGET_MASQUERADE NF_NAT_IPV6; do
+    if grep -qxE "CONFIG_${s}=(y|m)" "$CFG"; then
         echo "ERROR: CONFIG_${s} 应关闭，但被 Kconfig 重新打开了"
         exit 1
     fi
@@ -363,6 +378,15 @@ python3 "$REPO_ROOT/scripts/check_config.py" \
     "$STOCK_CFG" "$CFG" "$LOCALVERSION_STR" "$EXPECTED_RELEASE" \
     | tee "$DIST/stock-check.txt"
 fi
+
+section "7.5 框架兼容矩阵核对（Android 13 FCM level 5）"
+# VintfObject.verifyWithoutAvb() 用 /system/etc/vintf/compatibility_matrix.5.xml 里
+# <kernel version="4.19.110" level="5"> 的 251 项内核配置校验内核；任何一项不符，
+# Build.isBuildConsistent() 返回 false，开机弹 "internal problem" 对话框。
+# 清单从本机 vendor 分区提取（config/fcm-4.19.110-level5.txt），
+# 在 CI 里跑可以避免「编完刷机才发现弹窗」。
+python3 "$REPO_ROOT/scripts/check_fcm.py" "$CFG" \
+    || { echo "ERROR: 内核配置与设备 FCM 不一致，开机会弹出 internal problem 对话框"; exit 1; }
 
 section "8. 应用 Droidspaces 运行期补丁"
 cd "$KERNEL_DIR"
