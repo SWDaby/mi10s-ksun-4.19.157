@@ -1,0 +1,23 @@
+{
+  "comment": "Android boot.img v3 layout template; only the kernel payload is replaced",
+  "firmware": "V14.0.6.0.TGACNXM",
+  "page": 4096,
+  "header_version": 3,
+  "header_size": 1580,
+  "total_size": 134217728,
+  "kernel_offset": 4096,
+  "ramdisk_size": 19729764,
+  "ramdisk_md5": "fb77a9c20d848e2825342d6494b488cb",
+  "os_version": 436207993,
+  "cmdline": "",
+  "header_sha256": "c4df5fb552cc7e5a6e7100b687bb76d6cafdfb4da1bf243a1dc6a2ed3378394c",
+  "vbmeta_offset": 72392704,
+  "vbmeta_size": 896,
+  "vbmeta_sha256": "32047af7b4af5a15b3989ff0472cf05fa691c78a1a45d628a57003c3326bbf7d",
+  "footer_sha256": "81f7fa9e2fd37eb511850310b28123dcb8463fba1d873921c82be7a03af53a82",
+  "footer_sha256_masked": "31e25f0e46fa6f278e3592d6261bf950b883cc268700fd5d0efc4bdb742a6823",
+  "footer_original_image_size": 72392704,
+  "template_md5": "f4cd48dccd0d5a8f78d2e909537fd7e2",
+  "template_size": 19735488,
+  "source_boot_md5": "03a3be9bdbf83f0b6b71e2b2ce730982"
+}

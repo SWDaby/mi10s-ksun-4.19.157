@@ -78,12 +78,12 @@ concurrency:
   cancel-in-progress: true
 ```
 
-`concurrency` 的 group 把 **10 个输入全部拼进去**，所以：
+`concurrency` 的 group 把**构建相关输入**全部拼进去，所以：
 
 - 同参数重复触发会取消旧的；
 - 不同参数（例如 `qemu_probe=0` 和 `qemu_probe=1`）可以并行，不会互相覆盖产物。
 
-### 3.2 十个输入（必须全部显式传）
+### 3.2 十二个输入（必须全部显式传）
 
 > 这是本项目最容易踩的坑：workflow 的默认值仍指向**已废弃的 pipa / moon_sm8250 树**。
 > 用网页点 “Run workflow” 而不改默认值，会直接编译错误的源码，十几分钟后才发现。
@@ -100,6 +100,8 @@ concurrency:
 | `allow_config_drift` | `1` | 仓库自带的原厂 config 来自另一棵树，保真门禁对本基线无效 |
 | `disable_arm64_hardening` | `0` | 保留原厂早期加固 |
 | `qemu_probe` | `0` | **刷机镜像必须为 0**；只有本地 QEMU 诊断才设 1 |
+| `publish_release` | `0` | `1` = 重打包 `boot-thyme-noroot.img` 并发布 release（见 5.1） |
+| `release_tag` | 空 | 留空 = `release-<run_number>` |
 
 命令行等价写法：
 
@@ -110,7 +112,8 @@ gh workflow run build.yml `
   -f defconfig=thyme_defconfig `
   -f allow_crc_mismatch=1 -f droidspaces_layer=1 `
   -f disable_relr=1 -f disable_kaslr=1 `
-  -f allow_config_drift=1 -f disable_arm64_hardening=0 -f qemu_probe=0
+  -f allow_config_drift=1 -f disable_arm64_hardening=0 -f qemu_probe=0 `
+  -f publish_release=0
 ```
 
 漏任何一个 `-f`，GitHub 会用默认值补齐，且**不会报错**。
@@ -119,13 +122,15 @@ gh workflow run build.yml `
 
 | Step | 内容 | 关键点 |
 |---|---|---|
-| Checkout build scripts | 拉本仓库 | 只包含 workflow / 脚本 / 配置 / 补丁 |
+| Checkout build scripts | 拉本仓库 | 只包含 workflow / 脚本 / 配置 / 补丁 / 模板 |
 | Install build deps | `bc bison cpio flex libelf-dev libssl-dev lz4 python3 rsync zip unzip wget dtc perl` 等 | Ubuntu 22.04 自带基础工具链 |
 | Clone kernel source | `git init` + `remote add` + `git fetch --depth=1 origin <SHA>` + `checkout FETCH_HEAD` | 日志打印实际 HEAD 和 `Makefile` 的 VERSION/PATCHLEVEL/SUBLEVEL |
 | Setup AOSP Clang | 下载 `clang-r416183b.tar.gz`（android.googlesource.com），解到 `$HOME/aosp-clang` | Clang 12.0.5 + LLD 12.0.5；这棵树 CI 验证过的版本 |
 | Configure | `bash scripts/configure.sh` | 基线 config、Droidspaces 层、断言、FCM 门禁，见 3.4 |
 | Build | `bash scripts/build.sh` | 预检、编译、产物校验、打包，见 3.4 |
+| Repack boot.img | `tools/pack_boot.py` + `tools/verify_boot.py`，仅 `publish_release=1` | 17 项结构校验全过才继续；`qemu_probe=1` 直接失败，见 5.1 |
 | Upload artifacts | `actions/upload-artifact@v4`，`if: always()` | 构建失败也能保留已生成的文件；configure 阶段失败则看 Actions 步骤日志；保留 **30 天** |
+| Publish release | `gh release create`，仅 `publish_release=1` 且前面全部成功 | job 需要 `permissions: contents: write`；标签默认 `release-<run_number>` |
 
 补充：
 
@@ -174,6 +179,7 @@ artifact 名称是 **`thyme-droidspaces-<run_number>`**（不是 run_id）。P8 
 | 文件 | 用途 |
 |---|---|
 | `Image` | 未打 root 补丁的内核 |
+| `boot-thyme-noroot.img` | **仅 `publish_release=1` 时生成**：重打包好的 128 MiB 可刷镜像 |
 | `AnyKernel3-thyme-droidspaces.zip` | 手机端 AnyKernel3 刷入包（本项目最终不用，保留备用） |
 | `config-final.txt` / `config-base.txt` / `config-diff.txt` | 最终配置 / 基线 / 差异 |
 | `Module.symvers` | 导出符号 + CRC |
@@ -541,6 +547,60 @@ powershell -ExecutionPolicy Bypass -File .\tools\flash_test.ps1 `
   `IP6_NF_TARGET_MASQUERADE` 为 `n`，并检查容器所需项为 `y`；
 - 只替换 `boot.img` 的 kernel 段，ramdisk / vbmeta / cmdline / 分区大小逐字节不变（15 项结构校验）；
 - **`qemu_probe=1` 的镜像绝对不能刷**：它没有原厂串口配置，还改过 `setup.c`。
+
+### 5.1 CI 直接出可刷镜像（`publish_release=1`）
+
+上面的 `finalize_boot.ps1` 需要本地那份 128 MiB 原厂 `boot.img`。为了让 Actions 自己也能出
+可刷镜像，仓库里存了一份**布局模板**而不是整只 boot.img：
+
+| 文件 | 大小 | 内容 |
+|---|---|---|
+| `bootimg/thyme-boot-template.bin` | 19.7 MB | 4096 B v3 header + 对齐后的原厂 ramdisk + AVB vbmeta(896 B) + footer(64 B)，**不含原厂 kernel** |
+| `bootimg/thyme-boot-template.json` | 1 KB | `total_size`、`ramdisk_md5`、`vbmeta_offset/sha256`、`cmdline`、`header_sha256`、`footer_sha256(_masked)` |
+
+为什么不是 128 MB：kernel 段占 52.7 MB、尾部到 footer 之间 61.8 MB 全是零填充，都可以从
+`total_size` / `vbmeta_offset` 推出来，没必要进仓库。
+
+`publish_release=1` 时多出的两步：
+
+```bash
+python3 tools/pack_boot.py  --template bootimg/thyme-boot-template.bin \
+    --manifest bootimg/thyme-boot-template.json --image dist/Image \
+    --out dist/boot-thyme-noroot.img
+
+python3 tools/verify_boot.py --boot dist/boot-thyme-noroot.img \
+    --manifest bootimg/thyme-boot-template.json --image dist/Image
+```
+
+`verify_boot.py` 的 17 项里，关键几条：
+
+| 检查 | 含义 |
+|---|---|
+| `kernel bytes == Image` | 写入的确实是这次构建的 `Image` |
+| `kernel padding zeroed` | kernel 尾部按页对齐补零，没有残留旧数据 |
+| `ramdisk MD5` / `os_version` / `cmdline` | 三样都和原厂完全一致 |
+| `vbmeta bytes unchanged` / `footer body unchanged` | AVB 段没被改动（kernel 变大时只修正偏移字段） |
+| `no root patch payload` | 出现 `KernelPatch` / `KernelSU` / `kpatch` 就拒绝发布 |
+
+这 17 项全过才会 `gh release create`。发布内容：`boot-thyme-noroot.img`、`Image`、
+`AnyKernel3` zip、`System.map`、`config-final.txt`、`SHA256SUMS`；标签默认 `release-<run_number>`。
+
+两个安全闸：
+
+- `qemu_probe=1` + `publish_release=1` → 重打包步骤第一行就 `exit 1`；
+- `publish_release=1` 但构建失败 → 发布步骤 `success()` 不成立，不会创建空 release。
+
+**与已验证路径的等价性**：拿本项目已刷入验证的 `Image` 走一遍 `pack_boot.py`，输出与真机验证过的
+无 root 镜像 **MD5 完全相同**（`67F5E7337DB2F153951035FB69B8C2BB`）；用打过 root 补丁的
+`Image` 再跑一次，也复现了当时刷入的 `F7E2743CAC8D57D9489BFB7938FD7FB8`（并被
+`no root patch payload` 正确拦下）。所以 CI 这条路径不是另一套实现。
+
+模板可用自己的原厂 boot.img 重新生成（需要 header v3 + AVB footer）：
+
+```bash
+python3 tools/make_boot_template.py --boot stock_boot.img \
+    --out-dir bootimg --name thyme-boot-template --firmware V14.0.6.0.TGACNXM
+```
 
 ---
 

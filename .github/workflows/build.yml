@@ -43,6 +43,14 @@ on:
         description: 'Enable PL011 console so the image can be booted in local QEMU (1=yes, never flash this)'
         required: false
         default: '0'
+      publish_release:
+        description: 'Repack boot.img and publish a no-root release (1=yes; refused when qemu_probe=1)'
+        required: false
+        default: '0'
+      release_tag:
+        description: 'Release tag (empty = release-<run_number>)'
+        required: false
+        default: ''
 
 concurrency:
   group: thyme-${{ inputs.kernel_branch }}-${{ inputs.defconfig }}-${{ inputs.droidspaces_layer }}-${{ inputs.allow_crc_mismatch }}-${{ inputs.disable_relr }}-${{ inputs.disable_kaslr }}-${{ inputs.allow_config_drift }}-${{ inputs.disable_arm64_hardening }}-${{ inputs.qemu_probe }}
@@ -53,6 +61,8 @@ jobs:
     name: thyme / ${{ inputs.kernel_branch }} / layer=${{ inputs.droidspaces_layer }} crc=${{ inputs.allow_crc_mismatch }} relr_off=${{ inputs.disable_relr }} kaslr_off=${{ inputs.disable_kaslr }} qemu=${{ inputs.qemu_probe }}
     runs-on: ubuntu-22.04
     timeout-minutes: 180
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout build scripts
@@ -119,6 +129,25 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
         run: bash scripts/build.sh
 
+      - name: Repack boot.img (no root)
+        if: inputs.publish_release == '1'
+        env:
+          QEMU_PROBE: ${{ inputs.qemu_probe }}
+        run: |
+          if [ "$QEMU_PROBE" = "1" ]; then
+            echo "::error::qemu_probe=1 的镜像禁止发布（探针版改过 setup.c，不能刷机）"
+            exit 1
+          fi
+          python3 tools/pack_boot.py \
+            --template bootimg/thyme-boot-template.bin \
+            --manifest bootimg/thyme-boot-template.json \
+            --image dist/Image \
+            --out dist/boot-thyme-noroot.img
+          python3 tools/verify_boot.py \
+            --boot dist/boot-thyme-noroot.img \
+            --manifest bootimg/thyme-boot-template.json \
+            --image dist/Image
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,6 +155,7 @@ jobs:
           name: thyme-droidspaces-${{ github.run_number }}
           path: |
             dist/Image
+            dist/boot-thyme-noroot.img
             dist/AnyKernel3-thyme-droidspaces.zip
             dist/config-final.txt
             dist/config-base.txt
@@ -138,3 +168,52 @@ jobs:
             dist/build.log
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Publish release
+        if: inputs.publish_release == '1' && success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag || format('release-{0}', github.run_number) }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/dist"
+          sha256sum Image boot-thyme-noroot.img AnyKernel3-thyme-droidspaces.zip System.map config-final.txt > SHA256SUMS
+          BOOT_MD5=$(md5sum boot-thyme-noroot.img | cut -d' ' -f1)
+          IMG_MD5=$(md5sum Image | cut -d' ' -f1)
+          VSTR=$(grep -m1 -aoE 'Linux version [0-9][0-9A-Za-z.+-]*' Image | cut -d' ' -f3)
+          cat > /tmp/notes.md <<EOF
+          thyme（小米 10S，SM8250）Droidspaces 内核 —— 无 root 正式版
+
+          | 项 | 值 |
+          | --- | --- |
+          | 内核版本 | \`$VSTR\`（与原厂 \`uname -r\` 一致） |
+          | 源码 | \`${{ inputs.kernel_repo }}\` @ \`${{ inputs.kernel_branch }}\` |
+          | defconfig | \`${{ inputs.defconfig }}\` |
+          | 构建 | run [${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+          **本 release 不含 root**：\`boot-thyme-noroot.img\` 只替换了 \`boot.img\` 的 kernel 段，
+          ramdisk / vbmeta / cmdline / 分区大小逐字节保持不变（AVB 未重签，需已解锁 bootloader）。
+
+          | 文件 | MD5 |
+          | --- | --- |
+          | \`boot-thyme-noroot.img\` | \`$BOOT_MD5\` |
+          | \`Image\` | \`$IMG_MD5\` |
+
+          刷入（fastboot）：
+
+          \`\`\`
+          fastboot flash boot boot-thyme-noroot.img
+          fastboot reboot
+          \`\`\`
+
+          - 适用固件：MIUI 14（Android 13）；换上别的固件前请用该固件的原厂 boot.img 重新打包。
+          - 配置满足 Android 13 FCM（\`compatibility_matrix.5.xml\`，251 项），开机不弹
+            "There's an internal problem with your device"。
+          - \`SYSVIPC\` 与 IPv6 NAT 保持原厂的 \`n\`；容器 IPv4 NAT 正常。
+          - 需要 root 时用管理器自带的 \`kptools\` + \`kpimg\` 对 \`Image\` 重新打补丁后重打包。
+          - 刷坏回退：音量减 + 电源约 15 秒进 fastboot，刷回原厂 boot.img 或上一个 release。
+          EOF
+          gh release create "$TAG" \
+            --title "thyme 内核 $VSTR 正式版（无 root）· release ${{ github.run_number }}" \
+            --notes-file /tmp/notes.md \
+            boot-thyme-noroot.img Image AnyKernel3-thyme-droidspaces.zip System.map config-final.txt SHA256SUMS

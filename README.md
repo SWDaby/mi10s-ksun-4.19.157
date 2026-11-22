@@ -102,7 +102,43 @@ Android 13 的 `Build.isBuildConsistent()` 在 Treble 设备上等价于
 
 > 交付镜像保存在构建仓库之外的本地项目中；仓库保存构建脚本、配置，以及 `docs/qemu-logs/` 里的 QEMU 探针原始日志。
 
-## 六、构建流程与 QEMU 验证细节
+## 六、发布正式版（release）
+
+输入 `publish_release=1` 时，构建成功后会自动重打包并发布一个**不含 root** 的正式版：
+
+1. `tools/pack_boot.py` 用 `bootimg/thyme-boot-template.bin` + `dist/Image` 重建
+   `boot-thyme-noroot.img`（128 MiB，与原分区同尺寸，只替换 kernel 段）；
+2. `tools/verify_boot.py` 做 17 项结构校验，任一失败即中止发布
+   （含 `no root patch payload`，所以打过 KernelPatch 的 Image 会被拒绝）；
+3. `gh release create` 上传 `boot-thyme-noroot.img`、`Image`、`AnyKernel3` zip、`System.map`、
+   `config-final.txt`、`SHA256SUMS`。
+
+| 约束 | 说明 |
+| --- | --- |
+| `qemu_probe=1` | 发布会**直接失败**，探针版改过 `setup.c`，不能刷机 |
+| 标签 | 默认 `release-<run_number>`，可用输入 `release_tag` 覆盖 |
+| 保留期 | release 永久保存；artifact 仍然只有 30 天 |
+| 权限 | job 声明 `permissions: contents: write`，用 `GITHUB_TOKEN` 发布 |
+
+`bootimg/` 里是什么：
+
+| 文件 | 内容 |
+| --- | --- |
+| `thyme-boot-template.bin` | 4096 B v3 头 + 原厂 ramdisk + AVB vbmeta + footer（19.7 MB，**不含原厂 kernel**） |
+| `thyme-boot-template.json` | 总大小、`ramdisk` MD5、vbmeta 偏移/哈希、cmdline、header 哈希等 |
+
+模板可以用自己设备导出的原厂 boot.img 重新生成：
+
+```bash
+python3 tools/make_boot_template.py --boot stock_boot.img \
+    --out-dir bootimg --name thyme-boot-template --firmware V14.0.6.0.TGACNXM
+```
+
+用本项目已刷入验证的那颗 `Image` 重打包，输出与本机验证过的无 root 镜像
+**逐字节一致**（MD5 `67F5E7337DB2F153951035FB69B8C2BB`），说明 CI 的这条重打包路径与
+真机验证路径等价，不是另一套实现。
+
+## 七、构建流程与 QEMU 验证细节
 
 [`docs/BUILD-AND-QEMU.md`](docs/BUILD-AND-QEMU.md) 记录了两条流水线的完整过程：
 
@@ -115,10 +151,16 @@ Android 13 的 `Build.isBuildConsistent()` 在 Treble 设备上等价于
   再到 `-mstack-protector-guard=global` 修复与两层反汇编复核。
 - **边界**：QEMU 能证明什么、不能证明什么，以及 CI 产物 → 重打包 → 刷机 → 体检的衔接方式。
 
-## 七、目录
+## 八、目录
 
 ```
 .github/workflows/build.yml        Actions 流程（全部输入见第三节）
+bootimg/thyme-boot-template.bin    boot.img 布局模板（header + ramdisk + vbmeta + footer）
+bootimg/thyme-boot-template.json   模板清单（大小、MD5、偏移、cmdline）
+tools/make_boot_template.py        从原厂 boot.img 生成模板
+tools/pack_boot.py                 模板 + Image → 128 MiB boot.img
+tools/verify_boot.py               重打包结果的结构校验（发布前门禁）
+tools/qemu_probe.sh                本地 QEMU 探针（诊断镜像，不可刷机）
 scripts/configure.sh               基线 config + Droidspaces 层 + 断言 + FCM 门禁
 scripts/build.sh                   编译 + 编译后 FCM 复核 + 打 AnyKernel3
 scripts/check_config.py            原厂配置保真核对
@@ -133,7 +175,7 @@ docs/BUILD-AND-QEMU.md             构建流程 + QEMU 验证全过程
 docs/qemu-logs/                    QEMU 串口日志与 GDB 现场（证据）
 ```
 
-## 八、重打 root 补丁
+## 九、重打 root 补丁
 
 换内核会掉 root：KernelPatch 补丁直接嵌在 kernel 里。用管理器自带的 `kptools` + `kpimg`
 对编译出来的 `Image` 重新打一遍即可，不需要改 ramdisk：

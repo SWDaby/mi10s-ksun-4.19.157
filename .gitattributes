@@ -4,3 +4,6 @@
 # 这两个文件必须逐字节保持原样，不做任何行尾转换
 *.patch -text
 *.config -text
+
+# boot.img 布局模板是二进制，禁止任何行尾/编码转换
+*.bin -text
