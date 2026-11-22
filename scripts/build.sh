@@ -9,17 +9,57 @@ set -euo pipefail
 
 EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 
+# AOSP clang 在 aarch64-linux-android 目标下默认使用 TLS 栈保护守卫
+# （canary 从 tpidr_el0 + 0x28 读取）。这是 bionic 用户态的约定，内核态
+# tpidr_el0 恒为 0，于是 start_kernel 函数序言一读 canary 就在 0x28 缺页；
+# 该异常发生在 SP 尚未切到任务栈之前，被判定为 "kernel stack overflow"，
+# 随后 panic -> dump_stack_minidump 再踩空 -> die() 递归抢 die_lock 死锁，
+# 外部表现就是完全没有串口输出的静默卡死。
+# 4.19 arm64 内核的 canary 是全局变量 __stack_chk_guard，必须强制 global。
+STACK_GUARD_FLAGS="-mstack-protector-guard=global"
+
 export PATH="$HOME/aosp-clang/bin:$PATH"
 export LC_ALL=C
 mkdir -p "$DIST"
 
 section() { echo; echo "=============== $* ==============="; }
 
+section "0. 栈保护守卫模式预检"
+# 防止工具链又回到 TLS 守卫：编译一个小函数，确认 canary 来自 __stack_chk_guard
+# 而不是 tpidr_el0。这个检查只要 1 秒，但能避免又白等 15 分钟并刷一次砖。
+SP_DIR=$(mktemp -d)
+cat > "$SP_DIR/sp_probe.c" <<'EOF'
+__attribute__((noinline)) int sp_probe(const char *s)
+{
+    char buf[16];
+    __builtin_memcpy(buf, s, 8);
+    return buf[0] + buf[8];
+}
+EOF
+clang --target=aarch64-linux-android -O2 -fstack-protector-strong \
+    $STACK_GUARD_FLAGS -c "$SP_DIR/sp_probe.c" -o "$SP_DIR/sp_probe.o"
+llvm-objdump -dr "$SP_DIR/sp_probe.o" > "$SP_DIR/sp_probe.txt"
+if grep -q 'tpidr_el0' "$SP_DIR/sp_probe.txt"; then
+    echo "ERROR: 栈保护仍在使用 tpidr_el0（TLS 守卫），内核会在 0x28 缺页卡死"
+    cat "$SP_DIR/sp_probe.txt"
+    rm -rf "$SP_DIR"
+    exit 1
+fi
+if ! grep -q '__stack_chk_guard' "$SP_DIR/sp_probe.txt"; then
+    echo "ERROR: 预检没有看到 __stack_chk_guard，编译选项可能没生效"
+    cat "$SP_DIR/sp_probe.txt"
+    rm -rf "$SP_DIR"
+    exit 1
+fi
+echo "  栈保护守卫: global (__stack_chk_guard) ✓"
+rm -rf "$SP_DIR"
+
 section "1. 编译 arm64 Image"
 cd "$KERNEL_DIR"
 set -o pipefail
 make -j"$(nproc)" O="$OUT" ARCH=arm64 \
     CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
+    KCFLAGS="$STACK_GUARD_FLAGS" \
     CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
     Image 2>&1 | tee "$DIST/build.log"
