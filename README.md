@@ -100,9 +100,22 @@ Android 13 的 `Build.isBuildConsistent()` 在 Treble 设备上等价于
 不带 root 的 `boot-P8-stock.img` MD5 为 `67F5E7337DB2F153951035FB69B8C2BB`
 （与上一版相同，因为内核代码未变，只有 root 补丁变了）。
 
-> 交付镜像与验证日志保存在构建仓库之外的本地项目中，仓库只保存构建脚本与配置。
+> 交付镜像保存在构建仓库之外的本地项目中；仓库保存构建脚本、配置，以及 `docs/qemu-logs/` 里的 QEMU 探针原始日志。
 
-## 六、目录
+## 六、构建流程与 QEMU 验证细节
+
+[`docs/BUILD-AND-QEMU.md`](docs/BUILD-AND-QEMU.md) 记录了两条流水线的完整过程：
+
+- **GitHub Actions 构建**：10 个输入的实际值与漏传后果、每个 step、`configure.sh` / `build.sh` 的
+  12 道门禁、artifact 内容、7 次关键 run 的真实耗时、构建期踩过的坑与处理。
+- **QEMU 虚拟机验证**：为什么这颗 SM8250 内核能在 `-M virt` 上启动、探针版与真机版的 3 处差异、
+  WSL 安装、完整启动命令及每个参数的原因、4 项判定标记、GDB 抓现场的步骤。
+- **根因案例**：AOSP Clang 默认 TLS 栈保护守卫（`tpidr_el0 + 0x28`）导致的静默卡死，
+  从 GDB 现场（`queued_spin_lock_slowpath` / `die_lock`）到 `handle_bad_stack` 的 `0x28` 故障地址，
+  再到 `-mstack-protector-guard=global` 修复与两层反汇编复核。
+- **边界**：QEMU 能证明什么、不能证明什么，以及 CI 产物 → 重打包 → 刷机 → 体检的衔接方式。
+
+## 七、目录
 
 ```
 .github/workflows/build.yml        Actions 流程（全部输入见第三节）
@@ -116,9 +129,11 @@ config/fcm-4.19.110-level5.txt     设备 FCM 要求清单
 config/stock-4.19.157-thyme.config 原厂配置转储（仅核对用，不是基线）
 patches/                           4 个源码补丁
 anykernel/anykernel.sh             只写 Image，不写 dtb/dtbo
+docs/BUILD-AND-QEMU.md             构建流程 + QEMU 验证全过程
+docs/qemu-logs/                    QEMU 串口日志与 GDB 现场（证据）
 ```
 
-## 七、重打 root 补丁
+## 八、重打 root 补丁
 
 换内核会掉 root：KernelPatch 补丁直接嵌在 kernel 里。用管理器自带的 `kptools` + `kpimg`
 对编译出来的 `Image` 重新打一遍即可，不需要改 ramdisk：

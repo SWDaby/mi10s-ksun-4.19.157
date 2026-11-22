@@ -1,0 +1,854 @@
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd083]
+[    0.000000] Linux version 4.19.157-perf-g9d90dd04aa7c (runner@runnervmxfy6o) (Android (7284624, based on r416183b) clang version 12.0.5 (https://android.googlesource.com/toolchain/llvm-project c935d99d7cf2016289302412d708641d52d2f7ee), LLD 12.0.5 (/buildbot/src/android/llvm-toolchain/out/llvm-project/lld c935d99d7cf2016289302412d708641d52d2f7ee)) #1 SMP PREEMPT Sun Nov 22 03:17:43 UTC 2026
+[    0.000000] Machine model: linux,dummy-virt
+[    0.000000] earlycon: pl11 at MMIO 0x0000000009000000 (options '')
+[    0.000000] bootconsole [pl11] enabled
+[    0.000000] debug: skip boot console de-registration.
+[    0.000000] debug: ignoring loglevel setting.
+[    0.000000] cma: Reserved 16 MiB at 0x00000000bf000000
+[    0.000000] On node 0 totalpages: 524288
+[    0.000000]   Normal zone: 8192 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 524288 pages, LIFO batch:63
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv0.2 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: Trusted OS migration not required
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#1] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Not tainted 4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 80400085 (Nzcv daIf +PAN -UAO)
+[    0.000000] pc : kmem_cache_alloc+0x4c/0x324
+[    0.000000] lr : kmem_cache_alloc+0x40/0x324
+[    0.000000] sp : ffffff800aa03a30
+[    0.000000] x29: ffffff800aa03a40 x28: ffffff800aa1d900 
+[    0.000000] x27: 0000000000000000 x26: 0000000000000000 
+[    0.000000] x25: 0000000000000001 x24: ffffff800af05000 
+[    0.000000] x23: 0000000000000000 x22: 0000000000000000 
+[    0.000000] x21: 0000000000000000 x20: ffffff80080d0940 
+[    0.000000] x19: 0000000000480020 x18: 0000000000000000 
+[    0.000000] x17: 0000000000000000 x16: 0000000000000001 
+[    0.000000] x15: 0000000000000001 x14: 0000000000000000 
+[    0.000000] x13: 0000000000000001 x12: 0000000000000000 
+[    0.000000] x11: 0000000000000000 x10: 0000000000000002 
+[    0.000000] x9 : 0000000000000001 x8 : ffffff800acb3000 
+[    0.000000] x7 : 0000000000000004 x6 : ffffff800aa03c98 
+[    0.000000] x5 : ffffff800aa03c98 x4 : 0000000000000000 
+[    0.000000] x3 : 0000000000000001 x2 : 0000000000000002 
+[    0.000000] x1 : 0000000000080020 x0 : 0000000000000000 
+[    0.000000] Call trace:
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 97ff525e 34000640 aa1f03f6 900151c8 (29435eb5) 
+[    0.000000] random: random: get_random_bytes called from oops_exit+0x30/0x60 with crng_init=0
+[    0.000000] ---[ end trace 0000000000000000 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#2] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa03380
+[    0.000000] x29: ffffff800aa033e0 x28: ffffff800827b768 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa0364f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa03000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 0000000000000000 x16: 00000000ffffffff 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa03380 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b52 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#3] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa02cd0
+[    0.000000] x29: ffffff800aa02d30 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa02f9f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa02000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa02cd0 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b53 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#4] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa02620
+[    0.000000] x29: ffffff800aa02680 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa028ef 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa02000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa02620 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b54 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#5] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa01f70
+[    0.000000] x29: ffffff800aa01fd0 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa0223f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa01000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa01f70 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b55 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#6] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa018c0
+[    0.000000] x29: ffffff800aa01920 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa01b8f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa01000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa018c0 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b56 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#7] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa01210
+[    0.000000] x29: ffffff800aa01270 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa014df 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa01000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa01210 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b57 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#8] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa00b60
+[    0.000000] x29: ffffff800aa00bc0 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa00e2f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa00000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa00b60 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b58 ]---
+[    0.000000] Unable to handle kernel read from unreadable memory at virtual address 0000000000000018
+[    0.000000] Mem abort info:
+[    0.000000]   ESR = 0x96000005
+[    0.000000]   Exception class = DABT (current EL), IL = 32 bits
+[    0.000000]   SET = 0, FnV = 0
+[    0.000000]   EA = 0, S1PTW = 0
+[    0.000000] Data abort info:
+[    0.000000]   ISV = 0, ISS = 0x00000005
+[    0.000000]   CM = 0, WnR = 0
+[    0.000000] [0000000000000018] user address but active_mm is swapper
+[    0.000000] Internal error: Oops: 96000005 [#9] PREEMPT SMP
+[    0.000000] Modules linked in:
+[    0.000000] Process swapper (pid: 0, stack limit = 0x(____ptrval____))
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800aa004b0
+[    0.000000] x29: ffffff800aa00510 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa0077f 
+[    0.000000] x21: 000000000000000b x20: ffffff800aa00000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800aa004b0 
+[    0.000000] Call trace:
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  dump_stack_minidump+0x7c/0x234
+[    0.000000]  0xffffff8008080144
+[    0.000000]  do_exit+0x724/0xa10
+[    0.000000]  die+0x37c/0x380
+[    0.000000]  die_kernel_fault+0x60/0x70
+[    0.000000]  __do_kernel_fault+0xfc/0x114
+[    0.000000]  do_page_fault+0x58/0x518
+[    0.000000]  do_translation_fault+0x2c/0x40
+[    0.000000]  do_mem_abort+0x4c/0xf4
+[    0.000000]  el1_da+0x1c/0xac
+[    0.000000]  kmem_cache_alloc+0x4c/0x324
+[    0.000000]  __sigqueue_alloc+0x84/0x124
+[    0.000000]  __send_signal+0xd0/0x3ec
+[    0.000000]  force_sig_info+0x160/0x18c
+[    0.000000]  arm64_force_sig_info+0x70/0xfc
+[    0.000000]  force_signal_inject+0xf8/0x154
+[    0.000000]  do_undefinstr+0x444/0x490
+[    0.000000]  el1_undef+0x10/0xa0
+[    0.000000]  is_scm_armv8+0x50/0xe8
+[    0.000000]  scm_call2+0x10/0x18
+[    0.000000]  init_random_pool+0x74/0xec
+[    0.000000]  setup_arch+0x1b8/0x1d8
+[    0.000000]  start_kernel+0x64/0x378
+[    0.000000] Code: 54000043 910003e0 f9457328 9274cc14 (3940610a) 
+[    0.000000] ---[ end trace f68728a0d3053b59 ]---
+[    0.000000] Insufficient stack space to handle exception!
+[    0.000000] ESR: 0x96000005 -- DABT (current EL)
+[    0.000000] FAR: 0x0000000000000018
+[    0.000000] Task stack:     [0xffffff800aa00000..0xffffff800aa04000]
+[    0.000000] IRQ stack:      [0x0000000000000000..0x0000000000004000]
+[    0.000000] Overflow stack: [0xffffff800a923080..0xffffff800a924080]
+[    0.000000] CPU: 0 PID: 0 Comm: swapper Tainted: G      D           4.19.157-perf-g9d90dd04aa7c #1
+[    0.000000] Hardware name: linux,dummy-virt (DT)
+[    0.000000] pstate: 20400085 (nzCv daIf +PAN -UAO)
+[    0.000000] pc : dump_stack_minidump+0x7c/0x234
+[    0.000000] lr : 0xffffff8008080144
+[    0.000000] sp : ffffff800a9ffe00
+[    0.000000] x29: ffffff800a9ffe60 x28: ffffff8008636a24 
+[    0.000000] x27: ffffff800acf4000 x26: ffffff800aa0f000 
+[    0.000000] x25: ffffff800aa1d900 x24: ffffff800aa0d000 
+[    0.000000] x23: ffffff800acf4000 x22: ffffff800aa000cf 
+[    0.000000] x21: 000000000000000b x20: ffffff800a9ff000 
+[    0.000000] x19: 0000000000000000 x18: 0000000000000000 
+[    0.000000] x17: 00000000ffffffff x16: 0000000000000000 
+[    0.000000] x15: ffffff800aa0d000 x14: ffffff800a0f13f0 
+[    0.000000] x13: 0000000000000040 x12: ffffff800a6b630f 
+[    0.000000] x11: 0000007ff8000000 x10: 0000000000000001 
+[    0.000000] x9 : 0000007ff7ffff01 x8 : 0000000000000000 
+[    0.000000] x7 : 646574706d657474 x6 : ffffff800acf4d09 
+[    0.000000] x5 : 0000000000000000 x4 : 0000000000000001 
+[    0.000000] x3 : 0000000000000021 x2 : 000000000000001f 
+[    0.000000] x1 : ffffff800a6b630f x0 : ffffff800a9ffe00 

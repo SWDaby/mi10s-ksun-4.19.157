@@ -1,0 +1,97 @@
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd083]
+[    0.000000] Linux version 4.19.157-perf-g9d90dd04aa7c (runner@runnervmxfy6o) (Android (7284624, based on r416183b) clang version 12.0.5 (https://android.googlesource.com/toolchain/llvm-project c935d99d7cf2016289302412d708641d52d2f7ee), LLD 12.0.5 (/buildbot/src/android/llvm-toolchain/out/llvm-project/lld c935d99d7cf2016289302412d708641d52d2f7ee)) #1 SMP PREEMPT Sun Nov 22 06:11:03 UTC 2026
+[    0.000000] Machine model: linux,dummy-virt
+[    0.000000] earlycon: pl11 at MMIO 0x0000000009000000 (options '')
+[    0.000000] bootconsole [pl11] enabled
+[    0.000000] debug: skip boot console de-registration.
+[    0.000000] debug: ignoring loglevel setting.
+[    0.000000] cma: Reserved 16 MiB at 0x00000000bf000000
+[    0.000000] On node 0 totalpages: 524288
+[    0.000000]   Normal zone: 8192 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 524288 pages, LIFO batch:63
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv0.2 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: Trusted OS migration not required
+[    0.000000] percpu: Embedded 24 pages/cpu s60824 r8192 d29288 u98304
+[    0.000000] pcpu-alloc: s60824 r8192 d29288 u98304 alloc=24*4096
+[    0.000000] pcpu-alloc: [0] 0 [0] 1 
+[    0.000000] Detected PIPT I-cache on CPU0
+[    0.000000] spectrev2 mitigation disabled by kernel configuration
+[    0.000000] CPU features: enabling workaround for EL2 vector hardening
+[    0.000000] CPU features: kernel page table isolation disabled by kernel configuration
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 516096
+[    0.000000] Kernel command line: ramoops_memreserve=4M console=ttyAMA0 earlycon=pl011,0x09000000 keep_bootcon panic=1 ignore_loglevel loglevel=8
+[    0.000000] Dentry cache hash table entries: 262144 (order: 9, 2097152 bytes)
+[    0.000000] Inode-cache hash table entries: 131072 (order: 8, 1048576 bytes)
+[    0.000000] mem auto-init: stack:off, heap alloc:off, heap free:off
+[    0.000000] Memory: 1981324K/2097152K available (26108K kernel code, 3620K rwdata, 14884K rodata, 2048K init, 13971K bss, 99444K reserved, 16384K cma-reserved)
+[    0.000000] random: random: get_random_u64 called from __kmem_cache_create+0x3c/0x478 with crng_init=0
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.000000] 
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU dyntick-idle grace-period acceleration is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=8 to nr_cpu_ids=2.
+[    0.000000] 	Tasks RCU enabled.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=2
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] GICv2m: range[mem 0x08020000-0x08020fff], SPI[80:143]
+[    0.000000] rcu: 	Offload RCU callbacks from CPUs: (none).
+[    0.000000] arch_timer: CPU0: Trapping CNTVCT access
+[    0.000000] arch_timer: cp15 timer(s) running at 62.50MHz (virt).
+[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x1cd42e208c, max_idle_ns: 881590405314 ns
+[    0.000131] sched_clock: 56 bits at 62MHz, resolution 16ns, wraps every 4398046511096ns
+[    0.001746] clocksource: Switched to clocksource arch_sys_counter
+[    0.038842] Calibrating delay loop (skipped), value calculated using timer frequency.. 125.00 BogoMIPS (lpj=250000)
+[    0.039444] pid_max: default: 32768 minimum: 301
+[    0.041187] Security Framework initialized
+[    0.043036] SELinux:  Initializing.
+[    0.051094] Mount-cache hash table entries: 4096 (order: 3, 32768 bytes)
+[    0.052547] Mountpoint-cache hash table entries: 4096 (order: 3, 32768 bytes)
+[    0.159124] ASID allocator initialised with 65536 entries
+[    0.163061] rcu: Hierarchical SRCU implementation.
+[    0.182251] Internal error: undefined instruction: 0 [#1] PREEMPT SMP
+[    0.182761] Modules linked in:
+[    0.183317] Process swapper/0 (pid: 1, stack limit = 0x(____ptrval____))
+[    0.183663] CPU: 0 PID: 1 Comm: swapper/0 Not tainted 4.19.157-perf-g9d90dd04aa7c #1
+[    0.183905] Hardware name: linux,dummy-virt (DT)
+[    0.184143] pstate: 00000005 (nzcv daif -PAN -UAO)
+[    0.184329] pc :           (null)
+[    0.184411] lr :           (null)
+[    0.184516] sp : 0000000000000000
+[    0.184605] x29: 0000000000000000 x28: 0000000000000000 
+[    0.184775] x27: 0000000000000000 x26: 0000000000000000 
+[    0.184891] x25: 0000000000000000 x24: 0000000000000000 
+[    0.185003] x23: 0000000000000000 x22: 0000000000000000 
+[    0.185115] x21: 0000000000000000 x20: 0000000000000000 
+[    0.185227] x19: 0000000000000000 x18: 0000000000000000 
+[    0.185434] x17: 0000000000000000 x16: 0000000000000000 
+[    0.185611] x15: 0000000000000000 x14: 0000000000000000 
+[    0.185730] x13: 0000000000000000 x12: 0000000000000000 
+[    0.185868] x11: 0000000000000000 x10: 0000000000000000 
+[    0.186030] x9 : 0000000000000000 x8 : 0000000000000000 
+[    0.186149] x7 : 0000000000000000 x6 : 0000000000000000 
+[    0.186262] x5 : 0000000000000000 x4 : 0000000000000000 
+[    0.186375] x3 : 0000000000000000 x2 : 0000000000000000 
+[    0.186526] x1 : 0000000000000000 x0 : 0000000000000000 
+[    0.186872] Call trace:
+[    0.187031]            (null)
+[    0.187747] Code: bad PC value
+[    0.188163] ---[ end trace 33a4138fe5b68e93 ]---
+[    0.194304] Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b
+[    0.194304] 
+[    0.195468] Rebooting in 1 seconds..

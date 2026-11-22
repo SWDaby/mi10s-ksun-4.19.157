@@ -1,0 +1,60 @@
+warning: No executable has been specified and target does not support
+determining executable automatically.  Try using the "file" command.
+0xffffff800813dfc4 in ?? ()
+  Id   Target Id                    Frame 
+* 1    Thread 1.1 (CPU#0 [running]) 0xffffff800813dfc4 in ?? ()
+  2    Thread 1.2 (CPU#1 [halted ]) 0x0000000000000000 in ?? ()
+
+Thread 2 (Thread 1.2):
+pc             0x0                 0x0
+lr             0x0                 0
+sp             0x0                 0x0
+x0             0x0                 0
+x1             0x0                 0
+x2             0x0                 0
+x3             0x0                 0
+x8             0x0                 0
+x9             0x0                 0
+x29            0x0                 0
+x30            0x0                 0
+
+Thread 1 (Thread 1.1):
+pc             0xffffff800813dfc4  0xffffff800813dfc4
+lr             0xffffff800813dfac  -549620293716
+sp             0xffffff800a922d90  0xffffff800a922d90
+x0             0x1                 1
+x1             0xffffff800acf414c  -549574459060
+x2             0x1                 1
+x3             0x30                48
+x8             0xffffff800acf414c  -549574459060
+x9             0x101               257
+x29            0xffffff800a922da0  -549578461792
+x30            0xffffff800813dfac  -549620293716
+
+Thread 2 (Thread 1.2):
+#0  0x0000000000000000 in ?? ()
+Backtrace stopped: not enough registers or memory available to unwind further
+
+Thread 1 (Thread 1.1):
+#0  0xffffff800813dfc4 in ?? ()
+#1  0x000000000000000e in ?? ()
+Backtrace stopped: previous frame identical to this frame (corrupt stack?)
+[Switching to thread 1 (Thread 1.1)]
+#0  0xffffff800813dfc4 in ?? ()
+   0xffffff800813dfac:	cmp	w0, #0x100
+   0xffffff800813dfb0:	b.cs	0xffffff800813dffc  // b.hs, b.nlast
+   0xffffff800813dfb4:	cbz	w0, 0xffffff800813dfec
+   0xffffff800813dfb8:	ldar	w9, [x8]
+   0xffffff800813dfbc:	tst	w9, #0xff
+   0xffffff800813dfc0:	b.eq	0xffffff800813dfec  // b.none
+=> 0xffffff800813dfc4:	sxtw	x9, w9
+   0xffffff800813dfc8:	sevl
+   0xffffff800813dfcc:	wfe
+   0xffffff800813dfd0:	ldxr	w10, [x8]
+   0xffffff800813dfd4:	eor	w10, w10, w9
+   0xffffff800813dfd8:	cbnz	w10, 0xffffff800813dfe0
+   0xffffff800813dfdc:	wfe
+   0xffffff800813dfe0:	ldar	w9, [x8]
+   0xffffff800813dfe4:	tst	w9, #0xff
+   0xffffff800813dfe8:	b.ne	0xffffff800813dfc4  // b.any
+[Inferior 1 (process 1) detached]
