@@ -243,6 +243,12 @@ section "2.6 原厂模块兼容项（vendor .ko 的符号/行为依赖）"
 "$KCFG" --file "$CFG" -e DYNAMIC_DEBUG -e HZ_250 -d HZ_300 -e ZRAM_WRITEBACK
 echo "  DYNAMIC_DEBUG / HZ_250 / ZRAM_WRITEBACK 已按原厂打开"
 
+# XLOGCHAR 必须关掉，改由 drivers/misc/xlogchar_stub.c 提供 xlogchar_kwrite()。
+# drivers/char/xlogchar.c 也导出同名符号，一旦 CONFIG_XLOGCHAR=y 就会和 stub 撞车：
+#   ld.lld: error: duplicate symbol: xlogchar_kwrite
+# 原厂 .ko 只要求这个符号存在、返回 0，不需要 /dev/xlogchar 本身。
+"$KCFG" --file "$CFG" -d XLOGCHAR
+
 section "3. olddefconfig"
 "${MK[@]}" olddefconfig
 
@@ -266,6 +272,16 @@ grep -qx "CONFIG_HZ=250" "$CFG" || {
     exit 1
 }
 echo "  OK: DYNAMIC_DEBUG=y / HZ=250（与原厂一致）"
+
+# XLOGCHAR 只能由 drivers/misc/xlogchar_stub.c 提供，不能让 drivers/char/xlogchar.c 也编进来
+# （两边都导出 xlogchar_kwrite，链接期直接 duplicate symbol）。
+# 这里只告警不中断：section 8.5 会按最终配置决定要不要放 stub。
+if grep -qE "^CONFIG_XLOGCHAR=(y|m)$" "$CFG"; then
+    echo "  WARN: CONFIG_XLOGCHAR 被打开了（-d 没压住，可能是被 select），stub 将跳过"
+    grep -E '^CONFIG_XLOGCHAR' "$CFG" | sed 's/^/        /'
+else
+    echo "  OK: CONFIG_XLOGCHAR 关闭（xlogchar_kwrite 由 stub 提供）"
+fi
 
 # Droidspaces 的三个可选项：缺了不影响容器启动，但会少功能。
 if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
@@ -412,6 +428,11 @@ section "8.5 原厂 vendor 模块兼容 stub（xlogchar_kwrite）"
 # 该函数在原厂也只用于把音频调试日志写进 xlog 缓冲区，返回值不参与任何控制流，
 # 所以补一个空实现即可；不引入任何新行为。
 XLOG_STUB="$KERNEL_DIR/drivers/misc/xlogchar_stub.c"
+if grep -qE "^CONFIG_XLOGCHAR=(y|m)$" "$CFG"; then
+    # 内核自己带了 drivers/char/xlogchar.c，符号已经有了，再放 stub 就是重复定义。
+    echo "  skip: CONFIG_XLOGCHAR 已打开，xlogchar_kwrite 由内核自身提供"
+    rm -f "$XLOG_STUB"
+else
 if [ ! -f "$XLOG_STUB" ]; then
     cat > "$XLOG_STUB" <<'STUB_EOF'
 // SPDX-License-Identifier: GPL-2.0
@@ -439,6 +460,7 @@ grep -q 'xlogchar_stub\.o' "$KERNEL_DIR/drivers/misc/Makefile" \
 grep -q 'xlogchar_stub\.o' "$KERNEL_DIR/drivers/misc/Makefile" \
     || { echo "ERROR: drivers/misc/Makefile 没登记 xlogchar_stub.o"; exit 1; }
 echo "  drivers/misc/Makefile 已登记 xlogchar_stub.o"
+fi
 
 section "9. 存档：最终配置 + 与原厂配置的差异"
 cp "$CFG" "$DIST/config-final.txt"
