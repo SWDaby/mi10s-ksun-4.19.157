@@ -27,31 +27,48 @@ section() { echo; echo "=============== $* ==============="; }
 section "0. 栈保护守卫模式预检"
 # 防止工具链又回到 TLS 守卫：编译一个小函数，确认 canary 来自 __stack_chk_guard
 # 而不是 tpidr_el0。这个检查只要 1 秒，但能避免又白等 15 分钟并刷一次砖。
+# 注意必须用 -fstack-protector-all：-strong 的启发式在 -O2 下可能把局部数组
+# 优化掉，导致根本不生成 canary，预检就形同虚设。
 SP_DIR=$(mktemp -d)
 cat > "$SP_DIR/sp_probe.c" <<'EOF'
 __attribute__((noinline)) int sp_probe(const char *s)
 {
-    char buf[16];
-    __builtin_memcpy(buf, s, 8);
-    return buf[0] + buf[8];
+    return s[0];
 }
 EOF
-clang --target=aarch64-linux-android -O2 -fstack-protector-strong \
-    $STACK_GUARD_FLAGS -c "$SP_DIR/sp_probe.c" -o "$SP_DIR/sp_probe.o"
-llvm-objdump -dr "$SP_DIR/sp_probe.o" > "$SP_DIR/sp_probe.txt"
-if grep -q 'tpidr_el0' "$SP_DIR/sp_probe.txt"; then
-    echo "ERROR: 栈保护仍在使用 tpidr_el0（TLS 守卫），内核会在 0x28 缺页卡死"
-    cat "$SP_DIR/sp_probe.txt"
+SP_COMMON="-fstack-protector-all -O2 -c"
+
+# 1) 先记录工具链默认守卫，方便以后回溯
+clang --target=aarch64-linux-android $SP_COMMON \
+    "$SP_DIR/sp_probe.c" -o "$SP_DIR/probe-default.o"
+llvm-objdump -dr "$SP_DIR/probe-default.o" > "$SP_DIR/probe-default.txt"
+if grep -q 'tpidr_el0' "$SP_DIR/probe-default.txt"; then
+    echo "  工具链默认守卫: tpidr_el0（TLS/sysreg，内核不可用）"
+elif grep -q 'sp_el0' "$SP_DIR/probe-default.txt"; then
+    echo "  工具链默认守卫: sp_el0（sysreg）"
+elif grep -q '__stack_chk_guard' "$SP_DIR/probe-default.txt"; then
+    echo "  工具链默认守卫: __stack_chk_guard（global）"
+else
+    echo "  工具链默认守卫: 未识别（canary 可能被优化掉）"
+fi
+
+# 2) 强制 global：必须看到 __stack_chk_guard，且不能出现 tpidr_el0
+clang --target=aarch64-linux-android $SP_COMMON \
+    $STACK_GUARD_FLAGS "$SP_DIR/sp_probe.c" -o "$SP_DIR/probe-global.o"
+llvm-objdump -dr "$SP_DIR/probe-global.o" > "$SP_DIR/probe-global.txt"
+if grep -q 'tpidr_el0' "$SP_DIR/probe-global.txt"; then
+    echo "ERROR: 强制 global 后仍然使用 tpidr_el0（内核会在 0x28 缺页卡死）"
+    cat "$SP_DIR/probe-global.txt"
     rm -rf "$SP_DIR"
     exit 1
 fi
-if ! grep -q '__stack_chk_guard' "$SP_DIR/sp_probe.txt"; then
-    echo "ERROR: 预检没有看到 __stack_chk_guard，编译选项可能没生效"
-    cat "$SP_DIR/sp_probe.txt"
+if ! grep -q '__stack_chk_guard' "$SP_DIR/probe-global.txt"; then
+    echo "ERROR: 强制 global 后没有看到 __stack_chk_guard，编译选项可能没生效"
+    cat "$SP_DIR/probe-global.txt"
     rm -rf "$SP_DIR"
     exit 1
 fi
-echo "  栈保护守卫: global (__stack_chk_guard) ✓"
+echo "  强制后守卫: __stack_chk_guard（global）✓"
 rm -rf "$SP_DIR"
 
 section "1. 编译 arm64 Image"
@@ -91,6 +108,25 @@ if strings -a "$IMG" | grep -qiE 'KernelPatch|KernelSU|kpatch'; then
     echo "ERROR: Image 里检测到 KernelPatch/KernelSU 字样，原厂行为会被破坏"
     strings -a "$IMG" | grep -iE 'KernelPatch|KernelSU|kpatch' | head -10
     exit 1
+fi
+
+# 端到端复核：直接反汇编真正参与链接的 vmlinux，确认 start_kernel 不再从
+# tpidr_el0 读 canary（预检只看编译选项，这里看实际产物）。
+if [ -f "$OUT/vmlinux" ]; then
+    if llvm-objdump -d --disassemble-symbols=start_kernel "$OUT/vmlinux" \
+            > "$DIST/start_kernel.dis" 2>/dev/null && [ -s "$DIST/start_kernel.dis" ]; then
+        if grep -q 'tpidr_el0' "$DIST/start_kernel.dis"; then
+            echo "ERROR: start_kernel 仍然从 tpidr_el0 读栈保护 canary"
+            head -20 "$DIST/start_kernel.dis"
+            exit 1
+        fi
+        echo "  start_kernel 栈保护守卫: 已确认不使用 tpidr_el0 ✓"
+    else
+        echo "  WARN: 无法反汇编 vmlinux 的 start_kernel，跳过端到端复核"
+        rm -f "$DIST/start_kernel.dis"
+    fi
+else
+    echo "  WARN: 没有 vmlinux，跳过端到端复核"
 fi
 
 cp "$IMG" "$DIST/Image"

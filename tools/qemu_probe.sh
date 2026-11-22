@@ -2,7 +2,11 @@
 # 在 WSL 的 QEMU 里启动内核 Image，抓串口日志（完全不碰手机）。
 #
 # 用法：
-#   bash tools/qemu_probe.sh <Image 路径> [日志路径]
+#   bash tools/qemu_probe.sh <Image 路径> [日志路径] [超时秒数]
+#
+# 退出码：
+#   0 = 内核成功走到 banner / 命令行 / 内存初始化
+#   1 = 内核在 banner 之前就死了（静默卡死或早期 panic）
 #
 # 说明：
 #   arm64 没有 machine_desc 表（arch/arm64/include/asm/mach/arch.h 不存在），
@@ -11,10 +15,14 @@
 #
 #   探针版本必须打开 CONFIG_SERIAL_AMBA_PL011（workflow 里 qemu_probe=1），
 #   否则 earlycon 认不出 PL011，串口一个字节都不会有。
+#
+#   QEMU virt 里没有 rootfs，内核最后会 panic "VFS: Unable to mount root fs"，
+#   这是正常的——能走到那里就说明早期启动路径已经全部走通。
 set -uo pipefail
 
-IMG="${1:?用法: qemu_probe.sh <Image> [log]}"
+IMG="${1:?用法: qemu_probe.sh <Image> [log] [timeout]}"
 LOG="${2:-/tmp/qemu-serial.log}"
+TIMEOUT="${3:-45}"
 
 if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then
     echo "ERROR: 没有 qemu-system-aarch64，先 apt-get install -y qemu-system-arm" >&2
@@ -23,12 +31,13 @@ fi
 
 echo "Image : $IMG ($(stat -c %s "$IMG") 字节)"
 echo "日志  : $LOG"
+echo "超时  : ${TIMEOUT}s"
 : > "$LOG"
 
 APPEND="console=ttyAMA0 earlycon=pl011,0x09000000 keep_bootcon panic=1 ignore_loglevel loglevel=8"
 
 # -no-reboot + panic=1：panic 后 1 秒退出，不会挂着刷屏
-timeout 180 qemu-system-aarch64 \
+timeout "$TIMEOUT" qemu-system-aarch64 \
     -M virt -cpu cortex-a72 -m 2048 -smp 2 \
     -nic none \
     -kernel "$IMG" \
@@ -36,6 +45,7 @@ timeout 180 qemu-system-aarch64 \
     -display none -monitor none -serial "file:$LOG" -no-reboot
 RC=$?
 echo "qemu 退出码: $RC（124 = 超时/卡住；0 或 1 = 正常结束）"
+echo "串口输出  : $(stat -c %s "$LOG") 字节"
 
 echo "--- 关键标记 ---"
 for pat in "Booting Linux" "Linux version" "Machine model" "Memory:" "smp:" \
@@ -48,3 +58,16 @@ done
 echo "--- 日志末尾 30 行 ---"
 tail -n 30 "$LOG" 2>/dev/null | sed 's/^/  /'
 echo "完整日志: $LOG"
+
+FAIL=0
+grep -qF -- "Booting Linux" "$LOG" || { echo "FAIL: 没有 Booting Linux（早期就死了）"; FAIL=1; }
+grep -qF -- "Linux version" "$LOG" || { echo "FAIL: 没有版本串"; FAIL=1; }
+grep -qF -- "Kernel command line" "$LOG" || { echo "FAIL: 没有走到命令行解析"; FAIL=1; }
+grep -qF -- "Memory:" "$LOG" || { echo "FAIL: 没有内存初始化输出"; FAIL=1; }
+
+if [ "$FAIL" -ne 0 ]; then
+    echo "结果: 失败"
+    exit 1
+fi
+echo "结果: 通过（早期启动路径正常）"
+exit 0
