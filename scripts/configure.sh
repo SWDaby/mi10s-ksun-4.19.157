@@ -123,9 +123,9 @@ if [ "${DROIDSPACES_LAYER:-1}" != "1" ]; then
 else
 section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
 # 来源：bcggxx 仓库 .github/workflows/droidspaces.config（Droidspaces 作者 ravindu644）
-# 官方清单里的 CGROUP_NET_PRIO 已去掉：本树的 net/core/netprio_cgroup.c 仍是
-# 4.19 的 css->cgroup->id 写法，而 struct cgroup 已回移到 5.x（id 在 kernfs 里），
-# 打开必编译失败。原厂本身也是关的，容器网络不依赖它。
+# CGROUP_NET_PRIO：本树的 net/core/netprio_cgroup.c 仍是 4.19 的 css->cgroup->id 写法，
+# 而 struct cgroup 已回移到 5.x（id 在 kernfs 里），直接打开必编译失败。
+# patches/04-fix-netprio-cgroup-id.patch 把它改成 cgroup_id() 后即可安全打开。
 "$KCFG" --file "$CFG" \
     -e SYSCTL \
     -e SYSVIPC \
@@ -134,6 +134,7 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e PID_NS \
     -e UTS_NS \
     -e IPC_NS \
+    -e USER_NS \
     -e SECCOMP \
     -e SECCOMP_FILTER \
     -e CGROUPS \
@@ -144,6 +145,8 @@ section "2. 叠加 Droidspaces non-GKI 配置（官方清单）"
     -e FAIR_GROUP_SCHED \
     -e CGROUP_FREEZER \
     -e CGROUP_CPUACCT \
+    -e CGROUP_NET_PRIO \
+    -e CFS_BANDWIDTH \
     -e DEVTMPFS \
     -e OVERLAY_FS \
     -e TMPFS_POSIX_ACL \
@@ -264,6 +267,19 @@ grep -qx "CONFIG_HZ=250" "$CFG" || {
 }
 echo "  OK: DYNAMIC_DEBUG=y / HZ=250（与原厂一致）"
 
+# Droidspaces 的三个可选项：缺了不影响容器启动，但会少功能。
+if [ "${DROIDSPACES_LAYER:-1}" = "1" ]; then
+    for s in USER_NS CFS_BANDWIDTH CGROUP_NET_PRIO; do
+        grep -qx "CONFIG_${s}=y" "$CFG" || {
+            echo "ERROR: CONFIG_${s}=y 没生效"
+            echo "       USER_NS -> 容器内 Docker / 沙箱；CFS_BANDWIDTH -> --cpus 限制；"
+            echo "       CGROUP_NET_PRIO -> 网络优先级 cgroup（需要 patches/04）"
+            exit 1
+        }
+    done
+    echo "  OK: USER_NS / CFS_BANDWIDTH / CGROUP_NET_PRIO 已打开"
+fi
+
 section "4.5 内核版本串核对"
 # 直接从 Makefile + .config 推算，避免 O= 构建下 setlocalversion 路径问题。
 REL="$(awk '$1=="VERSION"{v=$3}$1=="PATCHLEVEL"{p=$3}$1=="SUBLEVEL"{s=$3}$1=="EXTRAVERSION"{e=$3}END{print v"."p"."s e}' "$KERNEL_DIR/Makefile")$(grep '^CONFIG_LOCALVERSION=' "$CFG" | cut -d'"' -f2)"
@@ -359,6 +375,12 @@ else
     echo "  skip: 本树无 xt_qtaguid，panic 路径不存在"
 fi
 apply_patch "$REPO_ROOT/patches/02-fix-cgroup-file-prefix.patch" "cgroup 文件前缀恢复" "${PATCH_OPTIONAL:-0}"
+# 本树的 cgroup 核心已回移到 5.x（struct cgroup 没有 id，id 在 kernfs 里），
+# 但 net/core/netprio_cgroup.c 还是 4.19 的 css->cgroup->id 写法。
+# 不修就编不过，CONFIG_CGROUP_NET_PRIO 也就打不开。
+if [ -f net/core/netprio_cgroup.c ]; then
+    apply_patch "$REPO_ROOT/patches/04-fix-netprio-cgroup-id.patch" "net_prio cgroup 改用 cgroup_id()" "${PATCH_OPTIONAL:-0}"
+fi
 else
     echo "  跳过 Droidspaces 运行期补丁（DROIDSPACES_LAYER=0）"
 fi

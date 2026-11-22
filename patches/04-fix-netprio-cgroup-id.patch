@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: thyme-kernel build <build@localhost>
+Date: Sun, 22 Nov 2026 17:30:00 +0800
+Subject: [PATCH] net: netprio_cgroup: use cgroup_id() instead of css->cgroup->id
+
+This tree backported the 5.x cgroup core, where struct cgroup no longer has
+an id field: the id lives in the kernfs node and is read through
+cgroup_id(). netprio_cgroup.c still used the 4.19 style css->cgroup->id, so
+CONFIG_CGROUP_NET_PRIO could not be enabled (compile error).
+
+Droidspaces lists CONFIG_CGROUP_NET_PRIO in its recommended set; enabling it
+gives containers a net_prio cgroup. Behaviour is unchanged: cgroup_id()
+returns the same numeric id the old field held.
+---
+ net/core/netprio_cgroup.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+diff --git a/net/core/netprio_cgroup.c b/net/core/netprio_cgroup.c
+index 2397866..e252aa0 100644
+--- a/net/core/netprio_cgroup.c
++++ b/net/core/netprio_cgroup.c
+@@ -97,7 +97,7 @@ static int extend_netdev_table(struct net_device *dev, u32 target_idx)
+ static u32 netprio_prio(struct cgroup_subsys_state *css, struct net_device *dev)
+ {
+ 	struct netprio_map *map = rcu_dereference_rtnl(dev->priomap);
+-	int id = css->cgroup->id;
++	int id = (int)cgroup_id(css->cgroup);
+ 
+ 	if (map && id < map->priomap_len)
+ 		return map->priomap[id];
+@@ -117,7 +117,7 @@ static int netprio_set_prio(struct cgroup_subsys_state *css,
+ 			    struct net_device *dev, u32 prio)
+ {
+ 	struct netprio_map *map;
+-	int id = css->cgroup->id;
++	int id = (int)cgroup_id(css->cgroup);
+ 	int ret;
+ 
+ 	/* avoid extending priomap for zero writes */
+@@ -181,7 +181,7 @@ static void cgrp_css_free(struct cgroup_subsys_state *css)
+ 
+ static u64 read_prioidx(struct cgroup_subsys_state *css, struct cftype *cft)
+ {
+-	return css->cgroup->id;
++	return cgroup_id(css->cgroup);
+ }
+ 
+ static int read_priomap(struct seq_file *sf, void *v)
+@@ -243,7 +243,7 @@ static void net_prio_attach(struct cgroup_taskset *tset)
+ 	cgroup_sk_alloc_disable();
+ 
+ 	cgroup_taskset_for_each(p, css, tset) {
+-		void *v = (void *)(unsigned long)css->cgroup->id;
++		void *v = (void *)(unsigned long)cgroup_id(css->cgroup);
+ 
+ 		task_lock(p);
+ 		iterate_fd(p->files, 0, update_netprio, v);
