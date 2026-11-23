@@ -120,6 +120,11 @@ Android 13 的 `Build.isBuildConsistent()` 在 Treble 设备上等价于
 | 保留期 | release 永久保存；artifact 仍然只有 30 天 |
 | 权限 | job 声明 `permissions: contents: write`，用 `GITHUB_TOKEN` 发布 |
 
+端到端已验证一次：run [`45169780558`](https://github.com/jingbohi/thyme-droidspaces/actions/runs/45169780558)
+（14 分 9 秒）走完整条链路，重打包 17 项全 PASS，发布
+[`release-38`](https://github.com/jingbohi/thyme-droidspaces/releases/tag/release-38)，
+6 个附件的 SHA256 与 `SHA256SUMS` 逐项一致。
+
 `bootimg/` 里是什么：
 
 | 文件 | 内容 |

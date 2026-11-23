@@ -602,6 +602,18 @@ python3 tools/make_boot_template.py --boot stock_boot.img \
     --out-dir bootimg --name thyme-boot-template --firmware V14.0.6.0.TGACNXM
 ```
 
+**端到端实跑记录**（2026-11-23，run `45169780558`，14 分 9 秒）：
+
+| 步骤 | 结果 |
+|---|---|
+| Configure + Build | success（`Image` 49,317,904 B） |
+| Repack boot.img | 17 项全 PASS，`boot-thyme-noroot.img` 134,217,728 B，MD5 `e4531c648c844c78076db3107c00004d` |
+| Upload artifacts | `thyme-droidspaces-38`，87.7 MB（含重打包后的 `boot.img`） |
+| Publish release | `release-38`，6 个附件，SHA256 与 `SHA256SUMS` 全部一致 |
+
+注意：每次构建的内核里带编译时间戳，所以 `Image` / `boot.img` 的 MD5 每次不同（体积可以一样）；
+跨版本比对请认 release 里的 `SHA256SUMS`，不要拿旧 MD5 判断新构建是否有问题。
+
 ---
 
 ## 6. 时间线（2026-11-21 ~ 11-22）
