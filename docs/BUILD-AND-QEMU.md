@@ -3,7 +3,7 @@
 本文记录 thyme（小米 10S，SM8250）这颗 4.19 内核**怎么在 GitHub 上编译**、**怎么在 QEMU 虚拟机里先跑一遍**，以及这两条流水线在 P5→P8 期间真实踩过的坑和留下的证据。
 
 - 目标设备：Xiaomi Mi 10S（`thyme`），MIUI `V14.0.6.0.TGACNXM`，Android 13（API 33）
-- 构建仓库：`jingbohi/thyme-droidspaces`（构建时为 **Private**，P8 交付后改为 **Public**）
+- 构建仓库：`jingbohi/mi10s-droidspaces-kernel`（构建时为 **Private**，P8 交付后改为 **Public**）
 - QEMU 探针：`tools/qemu_probe.sh`
 - 证据日志：`docs/qemu-logs/`
 
