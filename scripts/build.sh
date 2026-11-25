@@ -84,6 +84,19 @@ make -j1 O="$OUT" ARCH=arm64 \
     CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
     prepare
+# KSU directly includes security/selinux/include/objsec.h, which in turn needs
+# the generated flask.h from objtree. A normal full build creates it through
+# the SELinux object dependency; the early KSU-only build must request it first.
+make -j1 O="$OUT" ARCH=arm64 \
+    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
+    KCFLAGS="$STACK_GUARD_FLAGS" \
+    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
+    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+    security/selinux/flask.h
+test -s "$OUT/security/selinux/flask.h" || {
+    echo "ERROR: SELinux 生成头 flask.h 不存在"
+    exit 1
+}
 make -j1 O="$OUT" ARCH=arm64 \
     CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
     KCFLAGS="$STACK_GUARD_FLAGS" \
