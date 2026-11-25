@@ -161,40 +161,46 @@ adb shell su -c id
 此路径会直接改 boot，不如方案 A 的临时启动安全。不要在没有 boot 备份时尝试，也不要把 ZIP
 用于小米 10（`umi`）、小米 10 Pro（`cmi`）或其他 SM8250 设备。
 
-## 刷入前仍缺少的材料
+## 当前无 AVB boot 的重打包记录
 
-普通 ADB shell 无权读取 `/dev/block/by-name/boot_a`，因此当时未能备份当前 boot 分区。
-保存下来的几十字节只是 `Permission denied` 文本，**不是镜像，禁止用于打包或刷入**。
+当前 Recovery 备份是 201,326,592 B 的 header-v3 原始 boot 分区镜像，不含 AVB footer/vbmeta。
+仓库原有的 AVB 模板工具不能用于该镜像，因此使用经过单元测试的
+`tools/pack_boot_v3_noavb.py` 重打包，并在未知尾部存在非零数据时强制拒绝。
 
-必须先通过以下任一可信来源取得当前 ROM 的真实 `boot.img`：
+| 项 | 值 |
+| --- | --- |
+| 原 boot SHA-256 | `b0b9c64cd9e19fd9a33f5993c60574416791391037b9c9c40d23559378ff7936` |
+| 原 kernel | 52,849,120 B，版本 `4.19.157-perf-g9d90dd04aa7c` |
+| 新 kernel | 49,299,472 B |
+| ramdisk | 60,676,559 B |
+| ramdisk SHA-256 | `f2d75076e9006f72a94b6ae9489c8d7838d1e6b2e86bcf223fb0156cd50d457f` |
+| 输出 boot | `boot-thyme-ksun-test.img`，201,326,592 B |
+| 输出 SHA-256 | `60f3a74b7d695c02416d23936e1e1deef9d8ef1c1512cae6a282f0b986b7ba1d` |
 
-- ROM 作者提供的同一构建包；
-- 已有 Recovery 中读取活动槽位；
-- Fastboot/Recovery 的只读分区备份功能。
+独立复核确认：header 除 `kernel_size` 外逐字节不变；新 kernel 与最终 `Image` 相同；ramdisk
+逐字节不变；kernel padding 与分区尾部均为零；镜像无 AVB 数据。该结果仅说明结构正确，仍需
+先用 `fastboot boot` 完成真机启动和硬件功能验证。
 
-拿到后先核对：
+## 原 boot 回退文件
 
-```bash
-sha256sum boot-current.img
-python3 tools/make_boot_template.py --boot boot-current.img \
-  --out-dir bootimg-current --name thyme-current --firmware current-port-rom
-```
+后续提供的 Recovery boot 备份已确认有效，其 SHA-256 为
+`b0b9c64cd9e19fd9a33f5993c60574416791391037b9c9c40d23559378ff7936`，并包含完全匹配的
+原内核和当前移植 ROM ramdisk。必须保留至少两份副本，作为不能启动时的回退文件。
 
-再用当前 boot 模板和 Actions 产出的 `Image` 重打包。不要使用仓库内
-`bootimg/thyme-boot-template.bin`：那个模板来自官方
-`V14.0.6.0.TGACNXM`，ramdisk 未必适配现在的 Android 14 移植系统。
+早期普通 ADB shell 读取分区时保存的几十字节只是 `Permission denied` 文本，仍然不是镜像，
+禁止使用。也不要使用仓库内来自官方 `V14.0.6.0.TGACNXM` 的 boot 模板替代当前移植 ROM。
 
 ## 真机验证顺序
 
 以下步骤必须等重新连接设备并确认拥有可恢复的原 boot.img 后再做：
 
-1. 校验新 boot 的 header、ramdisk、AVB footer，仅 kernel 区允许变化；
+1. 校验新 boot 的 header 和 ramdisk，仅 kernel 区允许变化，并确认该备份本来就没有 AVB 数据；
 2. 优先使用 `fastboot boot boot-thyme-ksun-test.img` 临时启动；
 3. 验证开机、触控、Wi-Fi、蜂窝、相机、指纹、音频和充电；
 4. 验证 `uname -r` 仍为 `4.19.157-perf-g9d90dd04aa7c`；
 5. 安装与该驱动 **UAPI 6** 匹配的 KernelSU-Next 管理器并验证授权；
 6. 安装一个无害模块，软重启后验证模块链；
-7. 全部通过后才考虑 `fastboot flash boot_a ...`。
+7. 全部通过并重新核对实时槽位后，才考虑永久写入当前 boot。
 
 不要直接刷 `dtbo`、`vendor_boot` 或仓库中其他 ROM 的 boot。也不要在尚未准备原 boot
 回退文件时刷入 AnyKernel3 包。
