@@ -85,14 +85,17 @@ make -j1 O="$OUT" ARCH=arm64 \
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
     prepare
 # KSU directly includes security/selinux/include/objsec.h, which in turn needs
-# the generated flask.h from objtree. A normal full build creates it through
-# the SELinux object dependency; the early KSU-only build must request it first.
+# the generated flask.h from objtree. This 4.19 top-level Makefile does not
+# expose flask.h as an individual target, so build the SELinux directory once
+# to generate it. KSU will patch the SELinux sources immediately afterwards;
+# those temporary SELinux objects are deleted below so the full build cannot
+# reuse objects compiled from the pre-patch source.
 make -j1 O="$OUT" ARCH=arm64 \
     CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
     KCFLAGS="$STACK_GUARD_FLAGS" \
     CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-    security/selinux/flask.h
+    security/selinux/
 test -s "$OUT/security/selinux/flask.h" || {
     echo "ERROR: SELinux 生成头 flask.h 不存在"
     exit 1
@@ -103,6 +106,11 @@ make -j1 O="$OUT" ARCH=arm64 \
     CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
     drivers/kernelsu/
+
+# KSU's Kbuild has now changed multiple SELinux source files. Invalidate only
+# the temporary compiled SELinux outputs while retaining flask.h and
+# av_permissions.h; the subsequent full build will rebuild all patched code.
+find "$OUT/security/selinux" -type f \( -name '*.o' -o -name '*.a' \) -delete
 
 grep -q '^static \(inline \)\?int can_umount' fs/namespace.c || {
     echo "ERROR: KernelSU 没有预先补入 can_umount()"
