@@ -113,8 +113,23 @@ case "$VERSION_STR" in
         ;;
 esac
 
-# 防止 KernelPatch / KernelSU 之类的第三方 payload 混进来（上一轮 panic 日志里出现过）。
-if strings -a "$IMG" | grep -qiE 'KernelPatch|KernelSU|kpatch'; then
+# 默认仍拒绝意外混入 root payload；专用 KSU 工作流必须显式 ALLOW_KSU=1，
+# 且最终 Kconfig 必须确认驱动是 built-in，避免一个命名开关绕过安全门禁。
+if [ "${ALLOW_KSU:-0}" = "1" ]; then
+    grep -qx 'CONFIG_KSU=y' "$OUT/.config" || {
+        echo "ERROR: ALLOW_KSU=1，但最终配置不是 CONFIG_KSU=y"
+        exit 1
+    }
+    grep -qx 'CONFIG_KSU_SYSCALL_TABLE_HOOK=y' "$OUT/.config" || {
+        echo "ERROR: KernelSU-Next 没有使用 4.19 所需的 syscall-table hook"
+        exit 1
+    }
+    if grep -qx 'CONFIG_KSU_KPROBES_HOOK=y' "$OUT/.config"; then
+        echo "ERROR: 4.19 禁止使用 KernelSU kprobes hook"
+        exit 1
+    fi
+    echo "  KernelSU-Next: built-in + syscall-table hook ✓"
+elif strings -a "$IMG" | grep -qiE 'KernelPatch|KernelSU|kpatch'; then
     echo "ERROR: Image 里检测到 KernelPatch/KernelSU 字样，原厂行为会被破坏"
     strings -a "$IMG" | grep -iE 'KernelPatch|KernelSU|kpatch' | head -10
     exit 1
@@ -180,9 +195,10 @@ cp "$IMG" "$DIST/ak3/Image"
 (
     cd "$DIST/ak3"
     rm -rf .git
-    zip -r9 -q "$DIST/AnyKernel3-thyme-droidspaces.zip" . -x '*.git*'
+    zip -r9 -q "$DIST/${PACKAGE_NAME:-AnyKernel3-thyme-droidspaces.zip}" . -x '*.git*'
 )
-echo "  AnyKernel3: $(stat -c %s "$DIST/AnyKernel3-thyme-droidspaces.zip") 字节"
+PACKAGE_PATH="$DIST/${PACKAGE_NAME:-AnyKernel3-thyme-droidspaces.zip}"
+echo "  AnyKernel3: $PACKAGE_PATH ($(stat -c %s "$PACKAGE_PATH") 字节)"
 
 section "4. 完成"
 ls -l "$DIST"

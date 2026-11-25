@@ -1,0 +1,202 @@
+name: Build thyme KernelSU-Next 4.19.157
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksun_ref:
+        description: 'Pinned KernelSU-Next legacy commit/tag'
+        required: true
+        type: string
+        default: 'e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a'
+      droidspaces_layer:
+        description: 'Also enable the optional Droidspaces/container config layer'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thyme-ksun-4.19.157-${{ inputs.ksun_ref }}-${{ inputs.droidspaces_layer }}
+  cancel-in-progress: true
+
+env:
+  KERNEL_REPO: https://github.com/PixelExperience-Devices/kernel_xiaomi_thyme
+  KERNEL_REF: bc9f46dca6f2d608578180543cc2ff9ee5ee8a82
+  DEFCONFIG: thyme_defconfig
+  EXPECTED_RELEASE: 4.19.157-perf-g9d90dd04aa7c
+
+jobs:
+  build:
+    name: thyme stock 4.19.157 + KSUN UAPI 6
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+
+      - name: Test build-time patch logic
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential cpio flex git libelf-dev libssl-dev lz4 \
+            python3 rsync zip unzip wget curl ca-certificates openssl \
+            device-tree-compiler perl
+
+      - name: Clone exact thyme kernel source
+        run: |
+          set -euo pipefail
+          git init -q "$GITHUB_WORKSPACE/kernel"
+          git -C "$GITHUB_WORKSPACE/kernel" remote add origin "$KERNEL_REPO"
+          git -C "$GITHUB_WORKSPACE/kernel" fetch --depth=1 origin "$KERNEL_REF"
+          git -C "$GITHUB_WORKSPACE/kernel" checkout -q FETCH_HEAD
+          test "$(git -C "$GITHUB_WORKSPACE/kernel" rev-parse HEAD)" = "$KERNEL_REF"
+          test -f "$GITHUB_WORKSPACE/kernel/arch/arm64/configs/$DEFCONFIG"
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' "$GITHUB_WORKSPACE/kernel/Makefile"
+
+      - name: Setup verified AOSP Clang r416183b
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/aosp-clang"
+          wget -q --tries=3 --timeout=120 \
+            -O /tmp/clang.tar.gz \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
+          tar -xzf /tmp/clang.tar.gz -C "$HOME/aosp-clang"
+          rm -f /tmp/clang.tar.gz
+          "$HOME/aosp-clang/bin/clang" --version
+
+      - name: Integrate pinned KernelSU-Next legacy driver
+        env:
+          KSU_REF: ${{ inputs.ksun_ref }}
+        run: |
+          set -euo pipefail
+          test "$KSU_REF" = "e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a" || {
+            echo "::warning::You changed the reviewed KernelSU-Next commit. Re-audit the 4.19 patches before flashing."
+          }
+          curl -fLSs --retry 3 \
+            "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/$KSU_REF/kernel/setup.sh" \
+            -o ksu_setup.sh
+          sha256sum ksu_setup.sh | tee ksu_setup.sha256
+          (cd kernel && sh ../ksu_setup.sh "$KSU_REF")
+          test "$(git -C kernel/KernelSU-Next rev-parse HEAD)" = "$KSU_REF"
+          python3 scripts/patch_ksun_419.py kernel
+          git -C kernel/KernelSU-Next rev-parse HEAD | tee ksun-commit.txt
+
+      - name: Configure exact stock-compatible kernel baseline
+        env:
+          KERNEL_DIR: ${{ github.workspace }}/kernel
+          OUT: ${{ github.workspace }}/out
+          DIST: ${{ github.workspace }}/dist
+          REPO_ROOT: ${{ github.workspace }}
+          DEFCONFIG: ${{ env.DEFCONFIG }}
+          EXPECTED_RELEASE: ${{ env.EXPECTED_RELEASE }}
+          ALLOW_CRC_MISMATCH: '1'
+          DROIDSPACES_LAYER: ${{ inputs.droidspaces_layer && '1' || '0' }}
+          DISABLE_RELR: '1'
+          DISABLE_KASLR: '1'
+          ALLOW_CONFIG_DRIFT: '1'
+          DISABLE_ARM64_HARDENING: '0'
+          QEMU_PROBE: '0'
+          PATCH_OPTIONAL: '1'
+        run: bash scripts/configure.sh
+
+      - name: Select KernelSU syscall-table hook for Linux 4.19
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/aosp-clang/bin:$PATH"
+          python3 scripts/prepare_ksun_config.py out/.config
+          make -j"$(nproc)" -C kernel O="$GITHUB_WORKSPACE/out" ARCH=arm64 \
+            CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
+            CROSS_COMPILE=aarch64-linux-android- \
+            CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
+            AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump STRIP=llvm-strip olddefconfig
+
+          grep -qx 'CONFIG_KSU=y' out/.config
+          grep -qx 'CONFIG_KSU_SYSCALL_TABLE_HOOK=y' out/.config
+          grep -qx '# CONFIG_KSU_KPROBES_HOOK is not set' out/.config
+          grep -qx '# CONFIG_KPROBES is not set' out/.config
+          grep -qx 'CONFIG_OVERLAY_FS=y' out/.config
+          python3 scripts/check_fcm.py out/.config
+
+          cp out/.config dist/config-final.txt
+          diff -u config/stock-4.19.157-thyme.config out/.config \
+            > dist/config-diff.txt || true
+          grep -E '^#? ?CONFIG_(KSU|KPROBES)' out/.config | tee dist/ksun-config.txt
+
+      - name: Build kernel Image and AnyKernel3 package
+        env:
+          KERNEL_DIR: ${{ github.workspace }}/kernel
+          OUT: ${{ github.workspace }}/out
+          DIST: ${{ github.workspace }}/dist
+          REPO_ROOT: ${{ github.workspace }}
+          EXPECTED_RELEASE: ${{ env.EXPECTED_RELEASE }}
+          ALLOW_KSU: '1'
+          PACKAGE_NAME: AnyKernel3-thyme-ksun.zip
+        run: bash scripts/build.sh
+
+      - name: Create checksums and build manifest
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p dist
+          cp ksu_setup.sh ksu_setup.sha256 ksun-commit.txt dist/ 2>/dev/null || true
+          {
+            echo "kernel_repo=$KERNEL_REPO"
+            echo "kernel_ref=$KERNEL_REF"
+            echo "expected_release=$EXPECTED_RELEASE"
+            echo "ksun_ref=${{ inputs.ksun_ref }}"
+            echo "droidspaces_layer=${{ inputs.droidspaces_layer }}"
+          } > dist/build-manifest.txt
+          (
+            cd dist
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+              | sort -z | xargs -0 sha256sum > SHA256SUMS
+          )
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "=== compiler/make errors ==="
+            grep -nEi 'error:|Error [0-9]+|FATAL|undefined reference|No rule to make target' \
+              dist/build.log 2>/dev/null | tail -n 80 || true
+            echo "=== final build log tail ==="
+            tail -n 100 dist/build.log 2>/dev/null || true
+            echo "=== resolved KSU config ==="
+            cat dist/ksun-config.txt 2>/dev/null || true
+          } > dist/diagnostics.txt
+
+      - name: Upload build outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thyme-4.19.157-ksun-${{ github.run_number }}
+          path: |
+            dist/Image
+            dist/AnyKernel3-thyme-ksun.zip
+            dist/config-final.txt
+            dist/config-base.txt
+            dist/config-diff.txt
+            dist/stock-check.txt
+            dist/Module.symvers
+            dist/System.map
+            dist/start_kernel.dis
+            dist/crc-mode.txt
+            dist/ksun-config.txt
+            dist/ksun-commit.txt
+            dist/ksu_setup.sh
+            dist/ksu_setup.sha256
+            dist/build-manifest.txt
+            dist/build.log
+            dist/diagnostics.txt
+            dist/SHA256SUMS
+          if-no-files-found: warn
+          retention-days: 30
