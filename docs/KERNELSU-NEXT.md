@@ -74,6 +74,93 @@ shim；错误禁用会造成编译或运行问题。
 - `build.log` / `diagnostics.txt`：构建证据；
 - `SHA256SUMS`：所有产物校验值。
 
+## 已验证的最终产物
+
+最终构建为 [Actions run #8](https://github.com/SWDaby/mi10s-ksun-4.19.157/actions/runs/45613755967)，
+仓库 commit `834b8990a0a42aa5194205a4ae208b17faa52e58`。所有 Actions step 均成功，
+artifact ZIP 的 SHA-256 与 GitHub API 返回的 digest 一致，内部 `SHA256SUMS` 15 项全部复算通过。
+
+| 文件 / 项 | 结果 |
+| --- | --- |
+| Artifact | `thyme-4.19.157-ksun-8` |
+| Artifact ZIP SHA-256 | `013151b8a5378960d0c55d3d4a9df999c92f37748832a6c2bda03dbe6f19c4f3` |
+| `Image` | 49,299,472 B |
+| `Image` SHA-256 | `a82f5506e82a4e430c3d932a1fafb26f615c1ffd3d8e3ce86c9ada59224f4658` |
+| `AnyKernel3-thyme-ksun.zip` | 24,932,540 B |
+| AnyKernel ZIP SHA-256 | `128c5213b212af2cb7e82a5423ddd922532d97495cf1350abea31f38876fbbcb` |
+| KSU 驱动 | version `33327`、UAPI `6`、built-in、syscall-table hook |
+| 版本串 | `4.19.157-perf-g9d90dd04aa7c` |
+| FCM | Android 13 level 5 的 251 项全部通过 |
+| AnyKernel 门禁 | `do.devicecheck=1`、仅允许 `thyme`、不含任何分区镜像、内嵌 Image 哈希一致 |
+
+最终 Image 的 `System.map` 已确认包含 `kernelsu_init`、`ksu_handle_sys_reboot`、
+`ksu_handle_newfstat_ret`、`ksu_syscall_table_hook_init` 和 `path_umount`。构建日志无 compiler/linker error。
+
+### 配套管理器
+
+该驱动是 UAPI 6；正式 Release `v3.4.2` 的管理器是 UAPI 5，**不能使用**。已核对的配套版本：
+
+| 项 | 值 |
+| --- | --- |
+| 上游 commit | `32e25d58fc1a187e1abe7278904c31571235fc83` |
+| 上游 Actions run | [`44888862619`](https://github.com/KernelSU-Next/KernelSU-Next/actions/runs/44888862619) |
+| Artifact | 普通 `manager`，不是 `manager-spoofed` |
+| Artifact ZIP SHA-256 | `6ec8002a10e862930e1170a131b7319ebb4f603d86e0efdfcfabfc1dbb55de7f` |
+| APK | `KernelSU_Next_v3.4.2-200-g32e25d58_33555-release.apk` |
+| APK SHA-256 | `be27972d50a2b44258541778fd021d06005e2e6cdeee254e66bb161580e0b1cb` |
+
+## 使用方式
+
+### A. 推荐：用当前 boot 临时启动验证
+
+先取得并备份**当前移植 ROM** 的真实 `boot.img`，再用最终 artifact 中的 `Image` 重新打包：
+
+```bash
+python3 tools/make_boot_template.py --boot boot-current.img \
+  --out-dir bootimg-current --name thyme-current --firmware current-port-rom
+
+python3 tools/pack_boot.py \
+  --template bootimg-current/thyme-current.bin \
+  --manifest bootimg-current/thyme-current.json \
+  --image Image \
+  --out boot-thyme-ksun-test.img
+```
+
+先检查设备和实时槽位，不要沿用旧记录硬编码槽位：
+
+```bash
+fastboot getvar product
+fastboot getvar current-slot
+fastboot boot boot-thyme-ksun-test.img
+```
+
+`product` 必须为 `thyme`。`fastboot boot` 只临时启动，不写分区；如果该 bootloader 不支持，
+不要因此直接改成 `flash`，先回到 Recovery 备份 boot。临时启动成功后检查：
+
+```bash
+adb shell uname -r
+adb shell getenforce
+```
+
+版本串应仍为 `4.19.157-perf-g9d90dd04aa7c`，SELinux 应为 `Enforcing`。安装上面的 UAPI 6
+管理器，打开后确认驱动可用；给 shell 授权后再检查：
+
+```bash
+adb shell su -c id
+```
+
+预期包含 `uid=0(root)`。随后逐项测试触控、Wi-Fi、蜂窝、通话、相机、指纹、音频、NFC、
+蓝牙和充电。全部通过并已有可恢复的原 boot 后，才考虑永久写入当前 boot 槽。
+
+### B. Recovery：刷 AnyKernel3
+
+`AnyKernel3-thyme-ksun.zip` 会从当前 boot 解包，只替换 kernel Image，保留当前 ramdisk；它不带
+也不写 `dtbo`、`vendor_boot` 或 `vbmeta`，并开启 `thyme` 设备检查。操作前仍必须在 Recovery
+备份 Boot；刷入后若不能启动，用 Fastboot/Recovery 恢复该备份。
+
+此路径会直接改 boot，不如方案 A 的临时启动安全。不要在没有 boot 备份时尝试，也不要把 ZIP
+用于小米 10（`umi`）、小米 10 Pro（`cmi`）或其他 SM8250 设备。
+
 ## 刷入前仍缺少的材料
 
 普通 ADB shell 无权读取 `/dev/block/by-name/boot_a`，因此当时未能备份当前 boot 分区。
