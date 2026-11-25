@@ -1,5 +1,8 @@
 # thyme（小米 10S）Droidspaces 内核构建
 
+> 本分支新增了针对 `4.19.157-perf-g9d90dd04aa7c` 的 KernelSU-Next 构建流程。
+> 使用说明、固定版本和刷入前门禁见 [`docs/KERNELSU-NEXT.md`](docs/KERNELSU-NEXT.md)。
+
 在**原厂内核配置**上叠加最小的 Droidspaces 配置层，产出可直接替换 `boot.img` 中 kernel 段的 `Image`。
 目标设备：Xiaomi Mi 10S（`thyme`，SM8250），MIUI `V14.0.6.0.TGACNXM`（Android 13，API 33）。
 
