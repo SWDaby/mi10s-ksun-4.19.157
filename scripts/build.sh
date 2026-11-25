@@ -246,6 +246,14 @@ fi
 [ -f "$OUT/System.map" ] && cp "$OUT/System.map" "$DIST/System.map" || echo "  WARN: 没有 System.map"
 
 section "3. 打包 AnyKernel3（仅 Image）"
+grep -qx 'do.devicecheck=1' "$REPO_ROOT/anykernel/anykernel.sh" || {
+    echo "ERROR: AnyKernel3 必须启用设备检查"
+    exit 1
+}
+grep -qx 'device.name1=thyme' "$REPO_ROOT/anykernel/anykernel.sh" || {
+    echo "ERROR: AnyKernel3 的目标设备不是 thyme"
+    exit 1
+}
 rm -rf "$DIST/ak3"
 git clone --depth=1 https://github.com/osm0sis/AnyKernel3 "$DIST/ak3"
 cp "$REPO_ROOT/anykernel/anykernel.sh" "$DIST/ak3/anykernel.sh"
@@ -259,6 +267,17 @@ cp "$IMG" "$DIST/ak3/Image"
 )
 PACKAGE_PATH="$DIST/${PACKAGE_NAME:-AnyKernel3-thyme-droidspaces.zip}"
 echo "  AnyKernel3: $PACKAGE_PATH ($(stat -c %s "$PACKAGE_PATH") 字节)"
+if unzip -Z1 "$PACKAGE_PATH" | grep -qE '(^|/)(boot|dtbo|vendor_boot|vbmeta)\.img$'; then
+    echo "ERROR: AnyKernel3 意外包含分区镜像"
+    exit 1
+fi
+PACKAGED_IMAGE_SHA=$(unzip -p "$PACKAGE_PATH" Image | sha256sum | awk '{print $1}')
+BUILT_IMAGE_SHA=$(sha256sum "$IMG" | awk '{print $1}')
+[ "$PACKAGED_IMAGE_SHA" = "$BUILT_IMAGE_SHA" ] || {
+    echo "ERROR: AnyKernel3 内的 Image 与本轮构建产物不一致"
+    exit 1
+}
+echo "  AnyKernel3 设备/内容/内核哈希门禁: PASS ✓"
 
 section "4. 完成"
 ls -l "$DIST"

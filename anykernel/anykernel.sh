@@ -1,5 +1,5 @@
 ### AnyKernel3 Ramdisk Mod Script
-## thyme (Mi 10S) / SM8250 — Droidspaces 内核
+## thyme (Mi 10S) / SM8250 — custom kernel
 ##
 ## 只替换 boot 分区里的 kernel Image：
 ##   - ramdisk 原样保留（现有 Magisk / MIUI init 不受影响）
@@ -8,8 +8,8 @@
 
 ### AnyKernel setup
 properties() { '
-kernel.string=Droidspaces Kernel for Xiaomi thyme (Mi 10S, MIUI 14)
-do.devicecheck=0
+kernel.string=Custom Kernel for Xiaomi Mi 10S (thyme, 4.19.157)
+do.devicecheck=1
 do.modules=0
 do.systemless=1
 do.cleanup=1
@@ -35,7 +35,7 @@ NO_BLOCK_DISPLAY=1;
 # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
 . tools/ak3-core.sh;
 
-ui_print "  -> thyme Droidspaces kernel (Image only, DTB/ramdisk untouched)";
+ui_print "  -> thyme kernel (Image only, DTB/ramdisk untouched)";
 
 # boot install
 split_boot;
