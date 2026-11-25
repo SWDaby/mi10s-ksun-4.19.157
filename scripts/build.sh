@@ -71,6 +71,45 @@ fi
 echo "  强制后守卫: __stack_chk_guard（global）✓"
 rm -rf "$SP_DIR"
 
+if [ "${ALLOW_KSU:-0}" = "1" ]; then
+section "0.5 串行触发 KernelSU-Next 的旧内核源码补丁"
+# KernelSU-Next legacy 的 Kbuild 会用 sed 给 fs/namespace.c、seccomp 和
+# SELinux 源码补兼容代码。如果直接从全量 -j 构建开始，这些文件可能先编译，
+# KSU 目录随后才修改源码，最终就会出现 path_umount 未定义或补丁未进目标文件。
+# 先单线程构建 KSU 目录，确保所有源码改写发生在全量并行编译之前。
+cd "$KERNEL_DIR"
+make -j1 O="$OUT" ARCH=arm64 \
+    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
+    KCFLAGS="$STACK_GUARD_FLAGS" \
+    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
+    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+    prepare
+make -j1 O="$OUT" ARCH=arm64 \
+    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
+    KCFLAGS="$STACK_GUARD_FLAGS" \
+    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
+    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+    drivers/kernelsu/
+
+grep -q '^static \(inline \)\?int can_umount' fs/namespace.c || {
+    echo "ERROR: KernelSU 没有预先补入 can_umount()"
+    exit 1
+}
+grep -q '^int path_umount' fs/namespace.c || {
+    echo "ERROR: KernelSU 没有预先补入 path_umount() 实现"
+    exit 1
+}
+grep -q '^int path_umount' fs/internal.h || {
+    echo "ERROR: KernelSU 没有预先补入 path_umount() 声明"
+    exit 1
+}
+grep -q 'atomic_t filter_count;' include/linux/seccomp.h || {
+    echo "ERROR: KernelSU 没有预先补入 seccomp filter_count 兼容字段"
+    exit 1
+}
+echo "  KernelSU 4.19 源码补丁已在并行构建前完成 ✓"
+fi
+
 section "1. 编译 arm64 Image"
 cd "$KERNEL_DIR"
 set -o pipefail
