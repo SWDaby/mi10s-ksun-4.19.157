@@ -24,6 +24,18 @@ PATCH_MEMORY = r'''#include <linux/version.h>
 #endif
 '''
 
+KERNEL_COMPAT = r'''static inline ssize_t __strscpy_pad(char *dest, const char *src, size_t count)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 222)
+    return strscpy_pad(dest, src, count);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 3, 0)
+    return strscpy(dest, src, count);
+#else
+    return -E2BIG;
+#endif
+}
+'''
+
 REBOOT = r'''SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
                 void __user *, arg)
 {
@@ -58,7 +70,12 @@ COMPAT_SYSCALL_DEFINE2(newfstat, unsigned int, fd,
 
 
 class PatchKernelSUNext419Test(unittest.TestCase):
-    def make_tree(self, *, has_copy_to_kernel_nofault: bool = False) -> Path:
+    def make_tree(
+        self,
+        *,
+        has_copy_to_kernel_nofault: bool = False,
+        has_strscpy_pad: bool = False,
+    ) -> Path:
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -66,6 +83,7 @@ class PatchKernelSUNext419Test(unittest.TestCase):
         files = {
             "drivers/kernelsu/Kbuild": KBUILD,
             "drivers/kernelsu/hook/patch_memory.c": PATCH_MEMORY,
+            "drivers/kernelsu/compat/kernel_compat.h": KERNEL_COMPAT,
             "drivers/kernelsu/runtime/ksud_integration.c": (
                 "void ksu_handle_newfstat_ret(unsigned int *fd, "
                 "struct stat __user **statbuf) {}\n"
@@ -76,6 +94,11 @@ class PatchKernelSUNext419Test(unittest.TestCase):
                 "long copy_to_kernel_nofault(void *dst, const void *src, size_t size);\n"
                 if has_copy_to_kernel_nofault
                 else "/* legacy 4.19 uaccess */\n"
+            ),
+            "include/linux/string.h": (
+                "ssize_t strscpy_pad(char *dest, const char *src, size_t count);\n"
+                if has_strscpy_pad
+                else "ssize_t strscpy(char *dest, const char *src, size_t count);\n"
             ),
         }
         for relative, content in files.items():
@@ -156,6 +179,27 @@ class PatchKernelSUNext419Test(unittest.TestCase):
 
         kbuild = (root / "drivers/kernelsu/Kbuild").read_text()
         self.assertIn('^static (inline )?int can_umount', kbuild)
+
+    def test_uses_local_strscpy_pad_fallback_when_vendor_kernel_lacks_helper(self):
+        root = self.make_tree(has_strscpy_pad=False)
+
+        patch_tree(root)
+
+        compat = (root / "drivers/kernelsu/compat/kernel_compat.h").read_text()
+        self.assertIn(
+            "#if 0  /* kernel does not provide strscpy_pad() */", compat
+        )
+
+    def test_keeps_strscpy_pad_call_when_kernel_declares_helper(self):
+        root = self.make_tree(has_strscpy_pad=True)
+
+        patch_tree(root)
+
+        compat = (root / "drivers/kernelsu/compat/kernel_compat.h").read_text()
+        self.assertIn(
+            "#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 222)", compat
+        )
+        self.assertNotIn("kernel does not provide strscpy_pad", compat)
 
 
 if __name__ == "__main__":

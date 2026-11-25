@@ -12,6 +12,12 @@ NOFAULT_GUARD = "#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)"
 NOFAULT_BACKPORT_GUARD = (
     "#if 0  /* kernel already provides copy_to_kernel_nofault() */"
 )
+STRSCPY_PAD_VERSION_GUARD = (
+    "#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 222)"
+)
+STRSCPY_PAD_FALLBACK_GUARD = (
+    "#if 0  /* kernel does not provide strscpy_pad() */"
+)
 
 
 def read(path: Path) -> str:
@@ -64,6 +70,34 @@ def patch_nofault_compatibility(root: Path, changes: list[str]) -> None:
         )
     if before.count(NOFAULT_GUARD) != 1:
         raise RuntimeError("KernelSU pre-5.8 nofault compatibility guard is missing")
+
+
+def patch_strscpy_pad_compatibility(root: Path, changes: list[str]) -> None:
+    kernel_string_header = root / "include/linux/string.h"
+    kernel_has_helper = bool(
+        re.search(r"\bstrscpy_pad\s*\(", read(kernel_string_header))
+    )
+    path = root / "drivers/kernelsu/compat/kernel_compat.h"
+    before = read(path)
+
+    if kernel_has_helper:
+        if STRSCPY_PAD_FALLBACK_GUARD in before:
+            raise RuntimeError(
+                "KernelSU strscpy_pad() call is disabled even though the kernel "
+                "declares the helper"
+            )
+        if before.count(STRSCPY_PAD_VERSION_GUARD) != 1:
+            raise RuntimeError("KernelSU strscpy_pad() compatibility guard is missing")
+        return
+
+    if STRSCPY_PAD_FALLBACK_GUARD in before:
+        return
+    if before.count(STRSCPY_PAD_VERSION_GUARD) != 1:
+        raise RuntimeError("expected one KernelSU strscpy_pad() version guard")
+    after = before.replace(
+        STRSCPY_PAD_VERSION_GUARD, STRSCPY_PAD_FALLBACK_GUARD, 1
+    )
+    write_if_changed(path, before, after, changes)
 
 
 def patch_reboot_hook(root: Path, changes: list[str]) -> None:
@@ -178,6 +212,7 @@ def patch_tree(root: Path) -> list[str]:
     changes: list[str] = []
     patch_can_umount_guard(root, changes)
     patch_nofault_compatibility(root, changes)
+    patch_strscpy_pad_compatibility(root, changes)
     patch_reboot_hook(root, changes)
     patch_newfstat_hook(root, changes)
     return changes
