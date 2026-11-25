@@ -54,7 +54,22 @@ jobs:
           set -euo pipefail
           git init -q "$GITHUB_WORKSPACE/kernel"
           git -C "$GITHUB_WORKSPACE/kernel" remote add origin "$KERNEL_REPO"
-          git -C "$GITHUB_WORKSPACE/kernel" fetch --depth=1 origin "$KERNEL_REF"
+          fetched=0
+          for attempt in 1 2 3; do
+            echo "Kernel fetch attempt $attempt/3"
+            if git -c http.version=HTTP/1.1 -C "$GITHUB_WORKSPACE/kernel" \
+                fetch --no-tags --depth=1 origin "$KERNEL_REF"; then
+              fetched=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$((attempt * 5))"
+            fi
+          done
+          [ "$fetched" = 1 ] || {
+            echo "::error::Kernel source fetch failed after 3 attempts"
+            exit 1
+          }
           git -C "$GITHUB_WORKSPACE/kernel" checkout -q FETCH_HEAD
           test "$(git -C "$GITHUB_WORKSPACE/kernel" rev-parse HEAD)" = "$KERNEL_REF"
           test -f "$GITHUB_WORKSPACE/kernel/arch/arm64/configs/$DEFCONFIG"
