@@ -122,17 +122,22 @@ jobs:
             AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy \
             OBJDUMP=llvm-objdump STRIP=llvm-strip olddefconfig
 
+          # Save and print the resolved state before assertions, so a failed
+          # Kconfig gate still leaves useful evidence in the artifact.
+          cp out/.config dist/config-final.txt
+          grep -E '^#? ?CONFIG_(KSU|KPROBES)' out/.config \
+            | tee dist/ksun-config.txt || true
+
           grep -qx 'CONFIG_KSU=y' out/.config
           grep -qx 'CONFIG_KSU_SYSCALL_TABLE_HOOK=y' out/.config
-          grep -qx '# CONFIG_KSU_KPROBES_HOOK is not set' out/.config
-          grep -qx '# CONFIG_KPROBES is not set' out/.config
+          ! grep -qE '^CONFIG_KSU_MANUAL_HOOK=(y|m)$' out/.config
+          ! grep -qE '^CONFIG_KSU_KPROBES_HOOK=(y|m)$' out/.config
+          ! grep -qE '^CONFIG_KPROBES=(y|m)$' out/.config
           grep -qx 'CONFIG_OVERLAY_FS=y' out/.config
           python3 scripts/check_fcm.py out/.config
 
-          cp out/.config dist/config-final.txt
           diff -u config/stock-4.19.157-thyme.config out/.config \
             > dist/config-diff.txt || true
-          grep -E '^#? ?CONFIG_(KSU|KPROBES)' out/.config | tee dist/ksun-config.txt
 
       - name: Build kernel Image and AnyKernel3 package
         env:
