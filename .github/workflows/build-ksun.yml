@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ksun_ref:
-        description: 'Pinned KernelSU-Next legacy commit/tag'
+        description: 'Pinned KernelSU-Next legacy full commit SHA'
         required: true
         type: string
         default: 'e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a'
@@ -76,6 +76,10 @@ jobs:
           KSU_REF: ${{ inputs.ksun_ref }}
         run: |
           set -euo pipefail
+          printf '%s' "$KSU_REF" | grep -Eq '^[0-9a-f]{40}$' || {
+            echo "::error::ksun_ref must be a full 40-character lowercase commit SHA"
+            exit 1
+          }
           test "$KSU_REF" = "e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a" || {
             echo "::warning::You changed the reviewed KernelSU-Next commit. Re-audit the 4.19 patches before flashing."
           }
