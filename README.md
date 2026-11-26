@@ -1,5 +1,10 @@
 # thyme（小米 10S）Droidspaces 内核构建
 
+> [!CAUTION]
+> 旧的 PE 源码 KSU 构建（Actions run #8，commit `834b899`）与设备原配置有 274 项差异，
+> 真机触发 `reboot,bpfloader-failed`。**禁止使用该 run 的 Image、AnyKernel 或 boot。**
+> 当前工作流已切换到 config 逐字节匹配的 exact-stock 源码，等待重新构建和真机验证。
+
 > 本分支新增了针对 `4.19.157-perf-g9d90dd04aa7c` 的 KernelSU-Next 构建流程。
 > 使用说明、固定版本和刷入前门禁见 [`docs/KERNELSU-NEXT.md`](docs/KERNELSU-NEXT.md)。
 

@@ -1,5 +1,12 @@
 # 小米 10S（thyme）KernelSU-Next 4.19.157 构建
 
+> [!CAUTION]
+> 本文中 Actions run #8 的 PE 源码产物已被真机证实不兼容：启动失败并记录
+> `reboot,bpfloader-failed`。该产物仅保留为失败分析证据，**不得继续刷入或临时启动**。
+> 工作流现已改用 `bcggxx/android_kernel_xiaomi_moon_sm8250` 的 exact-stock commit；其
+> `thyme_stock_defconfig` 与设备 `/proc/config.gz` 逐字节相同。新的产物必须重新构建并通过
+> 无 KSU 基线测试与 KSU 测试后才可使用。
+
 本分支为一台实机的精确内核基线增加 KernelSU-Next。它只编译内核和 AnyKernel3 包，
 **不会在 CI 中生成或发布可直接刷入的 `boot.img`**。当前 ROM 的 ramdisk 必须保留，不能拿
 别的 ROM 的 boot 镜像代替。
@@ -32,8 +39,8 @@
 
 | 组件 | 固定值 |
 | --- | --- |
-| 内核源码 | `PixelExperience-Devices/kernel_xiaomi_thyme` |
-| 内核 commit | `bc9f46dca6f2d608578180543cc2ff9ee5ee8a82` |
+| 内核源码 | `bcggxx/android_kernel_xiaomi_moon_sm8250` |
+| 内核 commit | `931792aa4683961ed6457e577477d68f164e779b` |
 | KernelSU-Next | `e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a`（`legacy` 历史） |
 | 工具链 | AOSP Clang `r416183b`（基线仓库已验证） |
 | 目标版本串 | `4.19.157-perf-g9d90dd04aa7c` |
@@ -74,9 +81,10 @@ shim；错误禁用会造成编译或运行问题。
 - `build.log` / `diagnostics.txt`：构建证据；
 - `SHA256SUMS`：所有产物校验值。
 
-## 已验证的最终产物
+## 已废弃的 PE 源码产物（仅供失败分析）
 
-最终构建为 [Actions run #8](https://github.com/SWDaby/mi10s-ksun-4.19.157/actions/runs/45613755967)，
+以下旧构建来自错误的 PE 基线，虽然编译和静态检查成功，但真机启动失败。不得使用。
+[Actions run #8](https://github.com/SWDaby/mi10s-ksun-4.19.157/actions/runs/45613755967)，
 仓库 commit `834b8990a0a42aa5194205a4ae208b17faa52e58`。所有 Actions step 均成功，
 artifact ZIP 的 SHA-256 与 GitHub API 返回的 digest 一致，内部 `SHA256SUMS` 15 项全部复算通过。
 
@@ -109,7 +117,9 @@ artifact ZIP 的 SHA-256 与 GitHub API 返回的 digest 一致，内部 `SHA256
 | APK | `KernelSU_Next_v3.4.2-200-g32e25d58_33555-release.apk` |
 | APK SHA-256 | `be27972d50a2b44258541778fd021d06005e2e6cdeee254e66bb161580e0b1cb` |
 
-## 使用方式
+## 使用方式（等待 exact-stock 新产物后恢复）
+
+以下流程只描述未来 exact-stock 产物的验证顺序。旧 run #8 的文件名和哈希不得用于操作。
 
 ### A. 推荐：用当前 boot 临时启动验证
 
@@ -161,8 +171,9 @@ adb shell su -c id
 此路径会直接改 boot，不如方案 A 的临时启动安全。不要在没有 boot 备份时尝试，也不要把 ZIP
 用于小米 10（`umi`）、小米 10 Pro（`cmi`）或其他 SM8250 设备。
 
-## 当前无 AVB boot 的重打包记录
+## 已废弃 PE Image 的无 AVB 重打包记录
 
+以下输出使用了已确认不兼容的旧 PE Image，**不得启动或刷入**；记录仅用于证明打包结构本身无误。
 当前 Recovery 备份是 201,326,592 B 的 header-v3 原始 boot 分区镜像，不含 AVB footer/vbmeta。
 仓库原有的 AVB 模板工具不能用于该镜像，因此使用经过单元测试的
 `tools/pack_boot_v3_noavb.py` 重打包，并在未知尾部存在非零数据时强制拒绝。
