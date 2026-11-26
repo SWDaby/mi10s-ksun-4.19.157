@@ -110,7 +110,10 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
           DEFCONFIG: ${{ env.DEFCONFIG }}
           EXPECTED_RELEASE: ${{ env.EXPECTED_RELEASE }}
-          ALLOW_CRC_MISMATCH: '0'
+          # KSU legacy adds fields to core structs (notably seccomp), changing
+          # many CONFIG_MODVERSIONS CRCs. Stock vendor modules must be allowed
+          # to load against this intentional ABI extension.
+          ALLOW_CRC_MISMATCH: '1'
           DROIDSPACES_LAYER: '0'
           DISABLE_RELR: '1'
           DISABLE_KASLR: '0'
@@ -201,7 +204,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: thyme-4.19.157-exact-ksun-${{ github.run_number }}
+          name: thyme-4.19.157-exact-ksun-allowcrc-${{ github.run_number }}
           path: |
             dist/Image
             dist/AnyKernel3-thyme-ksun.zip
