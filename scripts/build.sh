@@ -18,13 +18,7 @@ EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 # 4.19 arm64 内核的 canary 是全局变量 __stack_chk_guard，必须强制 global。
 STACK_GUARD_FLAGS="-mstack-protector-guard=global"
 
-TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$HOME/aosp-clang}"
-[ -x "$TOOLCHAIN_ROOT/bin/clang" ] || {
-    echo "ERROR: clang not executable: $TOOLCHAIN_ROOT/bin/clang"
-    exit 1
-}
-export PATH="$TOOLCHAIN_ROOT/bin:$PATH"
-export LC_ALL=C
+source "$REPO_ROOT/scripts/kbuild-env.sh"
 mkdir -p "$DIST"
 
 section() { echo; echo "=============== $* ==============="; }
@@ -83,34 +77,19 @@ section "0.5 串行触发 KernelSU-Next 的旧内核源码补丁"
 # KSU 目录随后才修改源码，最终就会出现 path_umount 未定义或补丁未进目标文件。
 # 先单线程构建 KSU 目录，确保所有源码改写发生在全量并行编译之前。
 cd "$KERNEL_DIR"
-make -j1 O="$OUT" ARCH=arm64 \
-    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
-    KCFLAGS="$STACK_GUARD_FLAGS" \
-    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
-    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-    prepare
+"${KBUILD[@]}" -j1 KCFLAGS="$STACK_GUARD_FLAGS" prepare
 # KSU directly includes security/selinux/include/objsec.h, which in turn needs
 # the generated flask.h from objtree. This 4.19 top-level Makefile does not
 # expose flask.h as an individual target, so build the SELinux directory once
 # to generate it. KSU will patch the SELinux sources immediately afterwards;
 # those temporary SELinux objects are deleted below so the full build cannot
 # reuse objects compiled from the pre-patch source.
-make -j1 O="$OUT" ARCH=arm64 \
-    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
-    KCFLAGS="$STACK_GUARD_FLAGS" \
-    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
-    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-    security/selinux/
+"${KBUILD[@]}" -j1 KCFLAGS="$STACK_GUARD_FLAGS" security/selinux/
 test -s "$OUT/security/selinux/flask.h" || {
     echo "ERROR: SELinux 生成头 flask.h 不存在"
     exit 1
 }
-make -j1 O="$OUT" ARCH=arm64 \
-    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
-    KCFLAGS="$STACK_GUARD_FLAGS" \
-    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
-    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-    drivers/kernelsu/
+"${KBUILD[@]}" -j1 KCFLAGS="$STACK_GUARD_FLAGS" drivers/kernelsu/
 
 # KSU's Kbuild has now changed multiple SELinux source files. Invalidate only
 # the temporary compiled SELinux outputs while retaining flask.h and
@@ -139,11 +118,7 @@ fi
 section "1. 编译 arm64 Image"
 cd "$KERNEL_DIR"
 set -o pipefail
-make -j"$(nproc)" O="$OUT" ARCH=arm64 \
-    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld \
-    KCFLAGS="$STACK_GUARD_FLAGS" \
-    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
-    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+"${KBUILD[@]}" -j"$(nproc)" KCFLAGS="$STACK_GUARD_FLAGS" \
     Image 2>&1 | tee "$DIST/build.log"
 
 section "2. 校验产物"

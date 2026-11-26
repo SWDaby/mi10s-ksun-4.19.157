@@ -17,25 +17,13 @@ DEFCONFIG="${DEFCONFIG:-stock/thyme_stock_defconfig}"
 EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 LOCALVERSION_STR="-perf-g9d90dd04aa7c"
 
-TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$HOME/aosp-clang}"
-[ -x "$TOOLCHAIN_ROOT/bin/clang" ] || {
-    echo "ERROR: clang not executable: $TOOLCHAIN_ROOT/bin/clang"
-    exit 1
-}
-export PATH="$TOOLCHAIN_ROOT/bin:$PATH"
-export LC_ALL=C
+source "$REPO_ROOT/scripts/kbuild-env.sh"
 
 CFG="$OUT/.config"
 KCFG="$KERNEL_DIR/scripts/config"
 STOCK_CFG="$REPO_ROOT/config/stock-4.19.157-thyme.config"
 
 mkdir -p "$OUT" "$DIST"
-
-# 与 bcggxx 仓库 CI 验证过的参数一致（AOSP clang r416183b）。
-MK=(make -j"$(nproc)" -C "$KERNEL_DIR" O="$OUT" ARCH=arm64
-    CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld
-    CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi-
-    AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip)
 
 section() { echo; echo "=============== $* ==============="; }
 
@@ -269,7 +257,7 @@ echo "  DYNAMIC_DEBUG / HZ_250 / ZRAM_WRITEBACK 已按原厂打开"
 # CONFIG_XLOGCHAR 关掉时才生成（见 section 8.5）。
 
 section "3. olddefconfig"
-"${MK[@]}" olddefconfig
+"${KBUILD[@]}" -C "$KERNEL_DIR" -j"$(nproc)" olddefconfig
 
 section "4. 基本完整性（防止 config 解析异常）"
 for s in ARM64 ARCH_KONA MODULES BLOCK MODVERSIONS MODULE_UNLOAD SMP PREEMPT; do

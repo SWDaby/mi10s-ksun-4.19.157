@@ -1,0 +1,98 @@
+name: Compare thyme stock-toolchain ABI
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      REPO_ROOT: ${{ github.workspace }}
+      KERNEL_DIR: ${{ github.workspace }}/kernel
+      OUT: ${{ github.workspace }}/out
+      DIST: ${{ github.workspace }}/dist
+      TOOLCHAIN_ROOT: ${{ github.workspace }}/sdllvm
+      KERNEL_LD: aarch64-linux-android-ld.bfd
+      ALLOW_CRC_MISMATCH: '0'
+      DROIDSPACES_LAYER: '0'
+      DISABLE_RELR: '1'
+      DISABLE_KASLR: '1'
+      DISABLE_DEBUG_INFO: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bc bison build-essential flex \
+            libelf-dev libssl-dev libtinfo5 libncurses5 lz4 device-tree-compiler
+
+      - name: Fetch pinned kernel, Snapdragon LLVM and Android build 5790414 binutils
+        run: |
+          set -euo pipefail
+          fetch_at() {
+            local repo=$1 ref=$2 dir=$3
+            git init -q "$dir"
+            git -C "$dir" fetch -q --no-tags --depth=1 "https://github.com/$repo.git" "$ref"
+            git -C "$dir" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$ref"
+          }
+          fetch_at bcggxx/android_kernel_xiaomi_moon_sm8250 931792aa4683961ed6457e577477d68f164e779b "$KERNEL_DIR"
+          fetch_at sticpaper/Snapdragon-LLVM-ARM-Compiler-10.0.7-for-Android-NDK a16fec82a8deaf8f742ea54f8de98c021af200d4 "$TOOLCHAIN_ROOT"
+          fetch_at LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 bf9edd0fe6645286e13b480936aa7a6573188e1a gnu64
+          fetch_at LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 4618e20d2ee2f862f8790c81cdbcf2dc7285459a gnu32
+          printf '%s\n' "$PWD/gnu64/bin" "$PWD/gnu32/bin" >> "$GITHUB_PATH"
+
+      - name: Verify tools and configure the strict no-KSU control
+        run: |
+          set -euo pipefail
+          source scripts/kbuild-env.sh
+          mkdir -p "$DIST"
+          { clang --version; "$KERNEL_LD" --version; arm-linux-androideabi-ld.bfd --version; } | tee "$DIST/toolchain.txt"
+          grep -q '10\.0\.7' "$DIST/toolchain.txt"
+          grep -Fq 'GNU ld (binutils-2.27-bd24d23f) 2.27.0.20170315' "$DIST/toolchain.txt"
+          bash scripts/configure.sh
+          grep -qx 'CONFIG_CLANG_VERSION=100007' "$OUT/.config"
+          grep -qx 'CONFIG_MODVERSIONS=y' "$OUT/.config"
+          if grep -Eq '^CONFIG_(LD_IS_LLD|KSU|RANDOMIZE_BASE|RELR)=y' "$OUT/.config" ||
+             grep -Fq 'disagrees about version of symbol %s (ignored)' "$KERNEL_DIR/kernel/module.c"; then
+            echo 'Unexpected configuration or relaxed CRC check' >&2; exit 1
+          fi
+
+      - name: Build module_layout first, then the complete export table
+        run: |
+          set -euo pipefail
+          source scripts/kbuild-env.sh
+          printf '%s\n' 'int probe(const char *s) { return s[0]; }' > "$RUNNER_TEMP/probe.c"
+          probe=(clang --target=aarch64-linux-android -Werror -O2 -fstack-protector-all -S "$RUNNER_TEMP/probe.c" -o "$DIST/stack-guard.s")
+          guard=-mstack-protector-guard=global
+          if ! "${probe[@]}" "$guard"; then
+            guard=''
+            "${probe[@]}"
+          fi
+          printf 'KCFLAGS=%s\n' "$guard" >> "$DIST/toolchain.txt"
+          mk=("${KBUILD[@]}" -C "$KERNEL_DIR" -j"$(nproc)" KCFLAGS="$guard")
+          "${mk[@]}" KBUILD_SYMTYPES=1 kernel/module.o 2>&1 | tee "$DIST/probe.log"
+          cp "$OUT/kernel/module.symtypes" "$DIST/"
+          aarch64-linux-android-readelf -sW "$OUT/kernel/module.o" | awk '$8 == "__crc_module_layout" {print; found=1} END {exit !found}' | tee "$DIST/module-layout.txt"
+          "${mk[@]}" Image 2>&1 | tee "$DIST/build.log"
+          test -s "$OUT/Module.symvers"
+          cp "$OUT/Module.symvers" "$DIST/"
+          cp "$OUT/.config" "$DIST/config-final.txt"
+          grep -w module_layout "$DIST/Module.symvers" | tee "$GITHUB_STEP_SUMMARY"
+          grep -aom1 'Linux version 4\.19\.157[^[:cntrl:]]*' "$OUT/arch/arm64/boot/Image" > "$DIST/banner.txt"
+
+      - name: Upload ABI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thyme-clang10-strict-abi-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 14
