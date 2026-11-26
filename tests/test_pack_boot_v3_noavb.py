@@ -62,25 +62,15 @@ class PackBootV3WithoutAvbTest(unittest.TestCase):
         with self.assertRaisesRegex(BootImageError, "non-zero data after ramdisk"):
             pack_boot(bytes(source), b"N" * 4000)
 
-    def test_preserves_opaque_trailer_when_explicitly_requested(self):
+    def test_rejects_opaque_trailer_instead_of_relocating_it(self):
         source_kernel = b"K" * 4097
         ramdisk = b"R" * 5000
         source = bytearray(make_boot(source_kernel, ramdisk))
         trailer_offset = PAGE + align(len(source_kernel)) + len(ramdisk)
         trailer = b"opaque-vendor-trailer\x00with-internal-zero"
         source[trailer_offset : trailer_offset + len(trailer)] = trailer
-        target_kernel = b"N" * 8193
-
-        output = pack_boot(
-            bytes(source), target_kernel, preserve_opaque_trailer=True
-        )
-
-        new_trailer_offset = PAGE + align(len(target_kernel)) + len(ramdisk)
-        self.assertEqual(
-            trailer,
-            output[new_trailer_offset : new_trailer_offset + len(trailer)],
-        )
-        self.assertFalse(any(output[new_trailer_offset + len(trailer) :]))
+        with self.assertRaisesRegex(BootImageError, "normalize.*magiskboot"):
+            pack_boot(bytes(source), b"N" * 8193)
 
     def test_rejects_avb_data_inside_opaque_trailer(self):
         source = bytearray(make_boot(b"K" * 4097, b"R" * 5000))
@@ -88,27 +78,17 @@ class PackBootV3WithoutAvbTest(unittest.TestCase):
         source[trailer_offset : trailer_offset + 8] = b"AVB0data"
 
         with self.assertRaisesRegex(BootImageError, "AVB data"):
-            pack_boot(bytes(source), b"N" * 8193, preserve_opaque_trailer=True)
+            pack_boot(bytes(source), b"N" * 8193)
 
-    def test_preserves_nonzero_vendor_kernel_padding_when_length_matches(self):
+    def test_rejects_nonzero_kernel_padding_instead_of_relocating_it(self):
         source_kernel = b"K" * 4097
         target_kernel = b"N" * 8193
         source = bytearray(make_boot(source_kernel, b"R" * 5000))
         source_pad_start = PAGE + len(source_kernel)
         source[source_pad_start : source_pad_start + 4] = b"VEND"
 
-        output = pack_boot(bytes(source), target_kernel)
-
-        target_pad_start = PAGE + len(target_kernel)
-        self.assertEqual(b"VEND", output[target_pad_start : target_pad_start + 4])
-
-    def test_rejects_nonzero_vendor_padding_when_new_padding_length_differs(self):
-        source_kernel = b"K" * 4097
-        source = bytearray(make_boot(source_kernel, b"R" * 5000))
-        source[PAGE + len(source_kernel) : PAGE + len(source_kernel) + 4] = b"VEND"
-
-        with self.assertRaisesRegex(BootImageError, "vendor kernel padding"):
-            pack_boot(bytes(source), b"N" * 8194)
+        with self.assertRaisesRegex(BootImageError, "normalize.*magiskboot"):
+            pack_boot(bytes(source), target_kernel)
 
     def test_rejects_boot_with_avb_footer(self):
         source = bytearray(make_boot(b"K" * 5000, b"R" * 5000))

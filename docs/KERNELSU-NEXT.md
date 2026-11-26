@@ -178,6 +178,11 @@ adb shell su -c id
 仓库原有的 AVB 模板工具不能用于该镜像，因此使用经过单元测试的
 `tools/pack_boot_v3_noavb.py` 重打包，并在未知尾部存在非零数据时强制拒绝。
 
+> **真机纠正（2026-11-26）：** 不得把非零 kernel padding 或 header 所声明 ramdisk
+> 之后的 opaque 数据搬到新偏移。该做法即使能做到逐字节“保留”，也会使 `thyme` 循环重启。
+> 该工具现在只接受 padding 和尾部都为零的规范 v3 镜像；遇到非零数据必须改用设备上的
+> `magiskboot unpack/repack` 规范化，不能添加跳过参数。
+
 | 项 | 值 |
 | --- | --- |
 | 原 boot SHA-256 | `b0b9c64cd9e19fd9a33f5993c60574416791391037b9c9c40d23559378ff7936` |
@@ -200,6 +205,33 @@ adb shell su -c id
 
 早期普通 ADB shell 读取分区时保存的几十字节只是 `Permission denied` 文本，仍然不是镜像，
 禁止使用。也不要使用仓库内来自官方 `V14.0.6.0.TGACNXM` 的 boot 模板替代当前移植 ROM。
+
+### 当前 ROM 的 clean ramdisk 基底
+
+APatch 的 `/data/adb/ap/ori.img` 排除了 APatch 的 KernelPatch，但其 ramdisk 仍是此前的 Magisk
+patched ramdisk：`magiskboot cpio ramdisk.cpio test` 返回 `1`。2024-11-15 的 TWRP 备份也是同一
+原厂 kernel，但带另一版 Magisk ramdisk，不能只改后缀后直接作为 clean boot 使用。
+
+必须先让 `magiskboot cpio ramdisk.cpio restore` 使用 `.backup` 恢复 ramdisk，并确认恢复后及
+二次解包后的 `cpio ... test` 都返回 `0`。本次得到的当前 ROM 干净基底为：
+
+- 文件：`boot-current-rom-clean-restored.img`
+- 大小：201,326,592 B
+- SHA-256：`aaf203465bff13ca5a4762f9bb8427925aba645ce0101dbcf54454fccd8714d5`
+- 原厂 kernel SHA-256：`621437a91f77c3b53629f39f914ee3f58fea9f97827776e345300c99dc177970`
+- ramdisk 状态：`stock (0)`，无 Magisk/APatch overlay
+
+该基底已真机启动成功；原厂 kernel banner、Android 启动完成和“无 `su`/无 root daemon”三项均
+符合预期。后续所有 KSU/对照镜像都必须从它通过 `magiskboot` 重打包。
+
+### Strict CRC 对照的真机结论
+
+clean ramdisk + exact-stock 无 KSU/KASLR-off 重编 kernel 能进入 Android 并一度报告
+`sys.boot_completed=1`，但随后重启。失败启动的 `/proc/modules` 为 0。对 41 个原厂 vendor
+`.ko` 的 `__versions` 实测显示：其 1,127 个依赖符号中有 736 个 CRC 与公开源码构建不同；
+`module_layout` 为 `0xaad0c453`，而 baseline 为 `0xaf517461`。因此公开树虽有相同 config、release
+和 banner，仍不是小米私有模块 ABI 的逐 CRC 对应源码；真机版本必须使用
+`ALLOW_CRC_MISMATCH=1`，strict 产物禁止刷入。
 
 ## 真机验证顺序
 
