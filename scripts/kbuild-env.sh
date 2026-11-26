@@ -14,6 +14,7 @@ KBUILD=(make O="${OUT:?}" ARCH=arm64
     AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip)
 
 if [ "${KERNEL_LD:-ld.lld}" = aarch64-linux-android-ld.bfd ]; then
-    # Use the runner's native compiler for host programs, BFD for both target ABIs.
-    KBUILD+=(HOSTCC=gcc HOSTCXX=g++ LD_COMPAT=arm-linux-androideabi-ld.bfd)
+    # The NDK clang defaults to ARM. This tree's OpenSSL 3 host tools use
+    # diagnostic pragmas between if/else statements that GCC cannot parse.
+    KBUILD+=(HOSTCC=/usr/bin/clang HOSTCXX=/usr/bin/clang++ LD_COMPAT=arm-linux-androideabi-ld.bfd)
 fi
