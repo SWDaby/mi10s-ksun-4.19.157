@@ -17,7 +17,12 @@ DEFCONFIG="${DEFCONFIG:-stock/thyme_stock_defconfig}"
 EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 LOCALVERSION_STR="-perf-g9d90dd04aa7c"
 
-export PATH="$HOME/aosp-clang/bin:$PATH"
+TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$HOME/aosp-clang}"
+[ -x "$TOOLCHAIN_ROOT/bin/clang" ] || {
+    echo "ERROR: clang not executable: $TOOLCHAIN_ROOT/bin/clang"
+    exit 1
+}
+export PATH="$TOOLCHAIN_ROOT/bin:$PATH"
 export LC_ALL=C
 
 CFG="$OUT/.config"

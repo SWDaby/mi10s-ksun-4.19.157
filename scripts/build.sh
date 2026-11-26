@@ -18,7 +18,12 @@ EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 # 4.19 arm64 内核的 canary 是全局变量 __stack_chk_guard，必须强制 global。
 STACK_GUARD_FLAGS="-mstack-protector-guard=global"
 
-export PATH="$HOME/aosp-clang/bin:$PATH"
+TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$HOME/aosp-clang}"
+[ -x "$TOOLCHAIN_ROOT/bin/clang" ] || {
+    echo "ERROR: clang not executable: $TOOLCHAIN_ROOT/bin/clang"
+    exit 1
+}
+export PATH="$TOOLCHAIN_ROOT/bin:$PATH"
 export LC_ALL=C
 mkdir -p "$DIST"
 
