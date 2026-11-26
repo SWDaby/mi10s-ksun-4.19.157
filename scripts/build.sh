@@ -16,8 +16,6 @@ EXPECTED_RELEASE="${EXPECTED_RELEASE:-4.19.157-perf-g9d90dd04aa7c}"
 # 随后 panic -> dump_stack_minidump 再踩空 -> die() 递归抢 die_lock 死锁，
 # 外部表现就是完全没有串口输出的静默卡死。
 # 4.19 arm64 内核的 canary 是全局变量 __stack_chk_guard，必须强制 global。
-STACK_GUARD_FLAGS="-mstack-protector-guard=global"
-
 source "$REPO_ROOT/scripts/kbuild-env.sh"
 mkdir -p "$DIST"
 
@@ -38,10 +36,10 @@ EOF
 SP_COMMON="-fstack-protector-all -O2 -c"
 
 # 1) 先记录工具链默认守卫，方便以后回溯
-clang --target=aarch64-linux-android $SP_COMMON \
+clang --target="$KERNEL_CLANG_TARGET" $SP_COMMON \
     "$SP_DIR/sp_probe.c" -o "$SP_DIR/probe-default.o"
 llvm-objdump -dr "$SP_DIR/probe-default.o" > "$SP_DIR/probe-default.txt"
-if grep -q 'tpidr_el0' "$SP_DIR/probe-default.txt"; then
+if grep -iq 'tpidr_el0' "$SP_DIR/probe-default.txt"; then
     echo "  工具链默认守卫: tpidr_el0（TLS/sysreg，内核不可用）"
 elif grep -q 'sp_el0' "$SP_DIR/probe-default.txt"; then
     echo "  工具链默认守卫: sp_el0（sysreg）"
@@ -52,10 +50,10 @@ else
 fi
 
 # 2) 强制 global：必须看到 __stack_chk_guard，且不能出现 tpidr_el0
-clang --target=aarch64-linux-android $SP_COMMON \
+clang --target="$KERNEL_CLANG_TARGET" $SP_COMMON \
     $STACK_GUARD_FLAGS "$SP_DIR/sp_probe.c" -o "$SP_DIR/probe-global.o"
 llvm-objdump -dr "$SP_DIR/probe-global.o" > "$SP_DIR/probe-global.txt"
-if grep -q 'tpidr_el0' "$SP_DIR/probe-global.txt"; then
+if grep -iq 'tpidr_el0' "$SP_DIR/probe-global.txt"; then
     echo "ERROR: 强制 global 后仍然使用 tpidr_el0（内核会在 0x28 缺页卡死）"
     cat "$SP_DIR/probe-global.txt"
     rm -rf "$SP_DIR"
@@ -180,7 +178,7 @@ fi
 if [ -f "$OUT/vmlinux" ]; then
     if llvm-objdump -d --disassemble-symbols=start_kernel "$OUT/vmlinux" \
             > "$DIST/start_kernel.dis" 2>/dev/null && [ -s "$DIST/start_kernel.dis" ]; then
-        if grep -q 'tpidr_el0' "$DIST/start_kernel.dis"; then
+        if grep -iq 'tpidr_el0' "$DIST/start_kernel.dis"; then
             echo "ERROR: start_kernel 仍然从 tpidr_el0 读栈保护 canary"
             head -20 "$DIST/start_kernel.dis"
             exit 1

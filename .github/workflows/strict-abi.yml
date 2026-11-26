@@ -70,15 +70,13 @@ jobs:
           set -euo pipefail
           source scripts/kbuild-env.sh
           printf '%s\n' 'int probe(const char *s) { return s[0]; }' > "$RUNNER_TEMP/probe.c"
-          probe=(clang --target=aarch64-linux-android -Werror -O2 -fstack-protector-all -S "$RUNNER_TEMP/probe.c" -o "$DIST/stack-guard.s")
-          guard=-mstack-protector-guard=global
-          if ! "${probe[@]}" "$guard"; then
-            guard=''
-            "${probe[@]}"
+          clang --target="$KERNEL_CLANG_TARGET" -Werror -O2 -fno-pic -fstack-protector-all -S \
+            "$RUNNER_TEMP/probe.c" -o "$DIST/stack-guard.s"
+          if ! grep -qw __stack_chk_guard "$DIST/stack-guard.s" || grep -iqw tpidr_el0 "$DIST/stack-guard.s"; then
+            echo 'Compiler did not generate a global stack canary' >&2; exit 1
           fi
-          printf 'KCFLAGS=%s\n' "$guard" >> "$DIST/toolchain.txt"
-          clang --target=aarch64-linux-gnu -O2 -fstack-protector-all -S "$RUNNER_TEMP/probe.c" -o "$DIST/stack-guard-linux.s"
-          mk=("${KBUILD[@]}" -C "$KERNEL_DIR" -j"$(nproc)" KCFLAGS="$guard")
+          printf 'target=%s KCFLAGS=%s\n' "$KERNEL_CLANG_TARGET" "$STACK_GUARD_FLAGS" >> "$DIST/toolchain.txt"
+          mk=("${KBUILD[@]}" -C "$KERNEL_DIR" -j"$(nproc)" KCFLAGS="$STACK_GUARD_FLAGS")
           # Kbuild's .symtypes target discards genksyms' linker script. Keep its
           # unmodified output even if a later code generation or link step fails.
           cat > "$RUNNER_TEMP/record-genksyms" <<'EOF'
@@ -94,6 +92,9 @@ jobs:
           "${mk[@]}" GENKSYMS="$RUNNER_TEMP/record-genksyms" kernel/module.symtypes 2>&1 | tee "$DIST/probe.log"
           cp "$OUT/kernel/module.symtypes" "$DIST/"
           grep -w __crc_module_layout "$DIST/module.crcs" | tee "$DIST/module-layout.txt"
+          "${mk[@]}" init/main.o
+          cp "$OUT/include/generated/asm-offsets.h" "$DIST/"
+          aarch64-linux-android-readelf -rW "$OUT/init/main.o" | grep -w __stack_chk_guard > "$DIST/init-stack-guard.txt"
           "${mk[@]}" Image 2>&1 | tee "$DIST/build.log"
           test -s "$OUT/Module.symvers"
           cp "$OUT/Module.symvers" "$DIST/"
