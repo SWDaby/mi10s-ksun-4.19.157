@@ -237,8 +237,14 @@ if [ -s "$KERNEL_DIR/.scmversion" ]; then
 fi
 : > "$KERNEL_DIR/.scmversion"
 echo "  .scmversion 已清空（抑制 setlocalversion 追加 '+'）"
-# 只影响 vmlinux 调试段，不进 Image，也不影响符号 CRC；关掉省一半构建时间/磁盘。
-"$KCFG" --file "$CFG" -d DEBUG_INFO
+# 只影响 vmlinux 调试段，不进 Image，也不影响符号 CRC。旧流程默认关闭以节省
+# CI 时间/磁盘；精确 stock 构建可用 DISABLE_DEBUG_INFO=0 保留设备原配置。
+if [ "${DISABLE_DEBUG_INFO:-1}" = "1" ]; then
+    "$KCFG" --file "$CFG" -d DEBUG_INFO
+    echo "  DEBUG_INFO: 关闭（节省构建资源）"
+else
+    echo "  DEBUG_INFO: 保留原配置"
+fi
 
 section "2.6 原厂模块兼容项（vendor .ko 的符号/行为依赖）"
 # 这三项原厂都是开的，PE 的 thyme_defconfig 没开。缺了不影响内核启动，

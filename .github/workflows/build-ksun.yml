@@ -1,4 +1,4 @@
-name: Build thyme KernelSU-Next 4.19.157
+name: Build thyme exact-stock KernelSU-Next 4.19.157
 
 on:
   workflow_dispatch:
@@ -8,28 +8,23 @@ on:
         required: true
         type: string
         default: 'e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a'
-      droidspaces_layer:
-        description: 'Also enable the optional Droidspaces/container config layer'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: thyme-ksun-4.19.157-${{ inputs.ksun_ref }}-${{ inputs.droidspaces_layer }}
+  group: thyme-exact-ksun-4.19.157-${{ inputs.ksun_ref }}
   cancel-in-progress: true
 
 env:
-  KERNEL_REPO: https://github.com/PixelExperience-Devices/kernel_xiaomi_thyme
-  KERNEL_REF: bc9f46dca6f2d608578180543cc2ff9ee5ee8a82
-  DEFCONFIG: thyme_defconfig
+  KERNEL_REPO: https://github.com/bcggxx/android_kernel_xiaomi_moon_sm8250
+  KERNEL_REF: 931792aa4683961ed6457e577477d68f164e779b
+  DEFCONFIG: stock/thyme_stock_defconfig
   EXPECTED_RELEASE: 4.19.157-perf-g9d90dd04aa7c
 
 jobs:
   build:
-    name: thyme stock 4.19.157 + KSUN UAPI 6
+    name: thyme exact stock 4.19.157 + KSUN UAPI 6
     runs-on: ubuntu-22.04
     timeout-minutes: 180
 
@@ -107,7 +102,7 @@ jobs:
           python3 scripts/patch_ksun_419.py kernel
           git -C kernel/KernelSU-Next rev-parse HEAD | tee ksun-commit.txt
 
-      - name: Configure exact stock-compatible kernel baseline
+      - name: Configure byte-matched stock kernel baseline
         env:
           KERNEL_DIR: ${{ github.workspace }}/kernel
           OUT: ${{ github.workspace }}/out
@@ -115,14 +110,15 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
           DEFCONFIG: ${{ env.DEFCONFIG }}
           EXPECTED_RELEASE: ${{ env.EXPECTED_RELEASE }}
-          ALLOW_CRC_MISMATCH: '1'
-          DROIDSPACES_LAYER: ${{ inputs.droidspaces_layer && '1' || '0' }}
+          ALLOW_CRC_MISMATCH: '0'
+          DROIDSPACES_LAYER: '0'
           DISABLE_RELR: '1'
-          DISABLE_KASLR: '1'
-          ALLOW_CONFIG_DRIFT: '1'
+          DISABLE_KASLR: '0'
+          ALLOW_CONFIG_DRIFT: '0'
           DISABLE_ARM64_HARDENING: '0'
+          DISABLE_DEBUG_INFO: '0'
           QEMU_PROBE: '0'
-          PATCH_OPTIONAL: '1'
+          PATCH_OPTIONAL: '0'
         run: bash scripts/configure.sh
 
       - name: Select KernelSU syscall-table hook for Linux 4.19
@@ -150,6 +146,9 @@ jobs:
           ! grep -qE '^CONFIG_KPROBES=(y|m)$' out/.config
           grep -qx 'CONFIG_OVERLAY_FS=y' out/.config
           python3 scripts/check_fcm.py out/.config
+          python3 scripts/check_config.py \
+            config/stock-4.19.157-thyme.config out/.config \
+            -perf-g9d90dd04aa7c "$EXPECTED_RELEASE"
 
           diff -u config/stock-4.19.157-thyme.config out/.config \
             > dist/config-diff.txt || true
@@ -176,7 +175,7 @@ jobs:
             echo "kernel_ref=$KERNEL_REF"
             echo "expected_release=$EXPECTED_RELEASE"
             echo "ksun_ref=${{ inputs.ksun_ref }}"
-            echo "droidspaces_layer=${{ inputs.droidspaces_layer }}"
+            echo "droidspaces_layer=false"
           } > dist/build-manifest.txt
           (
             cd dist
@@ -202,7 +201,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: thyme-4.19.157-ksun-${{ github.run_number }}
+          name: thyme-4.19.157-exact-ksun-${{ github.run_number }}
           path: |
             dist/Image
             dist/AnyKernel3-thyme-ksun.zip
